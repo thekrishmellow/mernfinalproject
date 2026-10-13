@@ -271,21 +271,7 @@ export function RoadmapCanvas({
             </Panel>
           )}
 
-          {/* Top Right Save & Publish Actions */}
-          {!readOnly && (
-            <Panel position="top-right" className="m-4 flex items-center gap-2">
-              {onSave && (
-                <Button variant="secondary" size="sm" onClick={onSave} loading={isSaving}>
-                  Save Draft
-                </Button>
-              )}
-              {onPublish && (
-                <Button variant="accent" size="sm" onClick={onPublish} loading={isPublishing} icon={CheckCircle2}>
-                  Publish Version
-                </Button>
-              )}
-            </Panel>
-          )}
+
         </ReactFlow>
       </div>
 
