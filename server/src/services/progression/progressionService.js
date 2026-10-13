@@ -62,6 +62,90 @@ export async function initializeAssignmentProgress(assignment, publishedVersion)
 }
 
 /**
+ * Synchronizes an existing assignment to a newly published roadmap version.
+ * - Adds progress records for new nodes in the version (preserving root vs locked rules)
+ * - Retains progress for existing nodes (status, tasks, resources, quiz passes)
+ * - Updates lock reasons for downstream nodes based on new edge dependencies
+ * - Cleans up node progress records for nodes that were deleted in the new version
+ * - Recalculates downstream eligibility and overall progress percentage
+ */
+export async function syncAssignmentProgress(assignment, publishedVersion) {
+  const nodes = publishedVersion.nodes || [];
+  const edges = publishedVersion.edges || [];
+  const activeNodeIds = new Set(nodes.map((n) => n.id));
+
+  // 1. Remove orphaned NodeProgress records for deleted nodes
+  await NodeProgress.deleteMany({
+    assignment: assignment._id,
+    nodeId: { $nin: Array.from(activeNodeIds) }
+  });
+
+  // 2. Map prerequisite dependencies
+  const prereqMap = new Map();
+  const nodeTitleMap = new Map();
+  for (const node of nodes) {
+    prereqMap.set(node.id, []);
+    nodeTitleMap.set(node.id, node.title);
+  }
+  for (const edge of edges) {
+    if (prereqMap.has(edge.target)) {
+      prereqMap.get(edge.target).push(edge.source);
+    }
+  }
+
+  // 3. Fetch existing progress
+  const existingProgress = await NodeProgress.find({ assignment: assignment._id });
+  const existingMap = new Map(existingProgress.map((p) => [p.nodeId, p]));
+
+  const bulkOps = [];
+  for (const node of nodes) {
+    const existing = existingMap.get(node.id);
+    const prereqs = prereqMap.get(node.id) || [];
+    const isRoot = prereqs.length === 0;
+
+    const lockReasons = isRoot
+      ? []
+      : prereqs.map((srcId) => `Complete prerequisite: "${nodeTitleMap.get(srcId) || srcId}"`);
+
+    if (!existing) {
+      // Brand new node added in the updated roadmap
+      bulkOps.push({
+        insertOne: {
+          document: {
+            assignment: assignment._id,
+            nodeId: node.id,
+            status: isRoot ? 'available' : 'locked',
+            completedResources: [],
+            completedTasks: [],
+            passedQuiz: false,
+            lockReasons,
+            lastActivityAt: new Date()
+          }
+        }
+      });
+    } else {
+      // Existing node: if locked, update lockReasons with new prerequisite titles
+      if (existing.status === 'locked') {
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: existing._id },
+            update: { $set: { lockReasons } }
+          }
+        });
+      }
+    }
+  }
+
+  if (bulkOps.length > 0) {
+    await NodeProgress.bulkWrite(bulkOps);
+  }
+
+  // 4. Recalculate downstream eligibility & overall progress
+  await recalculateDownstreamEligibility(assignment._id);
+  await updateAssignmentOverallProgress(assignment._id);
+}
+
+/**
  * Validates whether a client is authorized to access a specific node.
  * Locked nodes are rejected with explicit reasons.
  */

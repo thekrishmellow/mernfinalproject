@@ -2,6 +2,7 @@ import { Roadmap } from '../models/Roadmap.js';
 import { RoadmapVersion } from '../models/RoadmapVersion.js';
 import { Assignment } from '../models/Assignment.js';
 import { validateRoadmapGraph } from '../services/roadmap/graphValidationService.js';
+import { syncAssignmentProgress } from '../services/progression/progressionService.js';
 
 export async function createRoadmap(req, res, next) {
   try {
@@ -230,6 +231,18 @@ export async function publishRoadmap(req, res, next) {
     roadmap.status = 'published';
     roadmap.currentPublishedVersion = newVersion._id;
     await roadmap.save();
+
+    // Dynamically synchronize all active assignments so client changes reflect immediately
+    const activeAssignments = await Assignment.find({
+      roadmap: roadmap._id,
+      status: { $in: ['active', 'completed', 'paused'] }
+    });
+
+    for (const asgn of activeAssignments) {
+      asgn.publishedVersion = newVersion._id;
+      await asgn.save();
+      await syncAssignmentProgress(asgn, newVersion);
+    }
 
     return res.json({
       success: true,

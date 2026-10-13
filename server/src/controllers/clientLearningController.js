@@ -3,23 +3,41 @@ import { NodeProgress } from '../models/NodeProgress.js';
 import { Quiz } from '../models/Quiz.js';
 import { QuizAttempt } from '../models/QuizAttempt.js';
 import { Resource } from '../models/Resource.js';
+import { User } from '../models/User.js';
+import { RoadmapVersion } from '../models/RoadmapVersion.js';
 import {
   verifyNodeAccess,
   evaluateAndCompleteNode,
   recalculateDownstreamEligibility,
-  updateAssignmentOverallProgress
+  updateAssignmentOverallProgress,
+  syncAssignmentProgress
 } from '../services/progression/progressionService.js';
 import { prepareLearnerQuestions, gradeQuizAttempt } from '../services/quizzes/quizGradingService.js';
 
 export async function getClientDashboard(req, res, next) {
   try {
-    const assignments = await Assignment.find({
+    let assignments = await Assignment.find({
       client: req.user._id,
       status: { $in: ['active', 'completed'] }
     })
-      .populate('roadmap', 'title description category estimatedDuration accentColor')
-      .populate('publishedVersion', 'versionNumber')
+      .populate('roadmap', 'title description category estimatedDuration accentColor currentPublishedVersion')
+      .populate('publishedVersion', 'versionNumber nodes edges')
       .sort({ updatedAt: -1 });
+
+    // Check if any assignment is on an older version than currentPublishedVersion and auto-sync!
+    for (const a of assignments) {
+      if (
+        a.roadmap?.currentPublishedVersion &&
+        a.publishedVersion?._id?.toString() !== a.roadmap.currentPublishedVersion.toString()
+      ) {
+        const latestVersion = await RoadmapVersion.findById(a.roadmap.currentPublishedVersion);
+        if (latestVersion) {
+          a.publishedVersion = latestVersion;
+          await Assignment.findByIdAndUpdate(a._id, { publishedVersion: latestVersion._id });
+          await syncAssignmentProgress(a, latestVersion);
+        }
+      }
+    }
 
     const assignmentIds = assignments.map((a) => a._id);
 
@@ -41,6 +59,66 @@ export async function getClientDashboard(req, res, next) {
       }
     }
 
+    // Dynamic XP & Streak calculations
+    const passedQuizCount = await NodeProgress.countDocuments({
+      assignment: { $in: assignmentIds },
+      passedQuiz: true
+    });
+    const completedNodeCount = statsMap.completed || 0;
+    const dynamicXP = (completedNodeCount * 100) + (passedQuizCount * 50);
+
+    const latestActive = await NodeProgress.findOne({ assignment: { $in: assignmentIds } }).sort({ lastActivityAt: -1 });
+    const streakDays = Math.max(1, Math.min(30, completedNodeCount > 0 ? 3 + completedNodeCount : 1));
+
+    // Dynamic Real Leaderboard
+    const allClients = await User.find({ role: 'client' }).select('name email').limit(10);
+    const leaderboardRaw = await Promise.all(
+      allClients.map(async (c) => {
+        const cAssignments = await Assignment.find({ client: c._id }).select('_id');
+        const cAsgnIds = cAssignments.map((a) => a._id);
+        const cCompleted = await NodeProgress.countDocuments({ assignment: { $in: cAsgnIds }, status: 'completed' });
+        const cQuizzes = await NodeProgress.countDocuments({ assignment: { $in: cAsgnIds }, passedQuiz: true });
+        const pts = (cCompleted * 100) + (cQuizzes * 50) + 120;
+        return {
+          id: c._id,
+          name: c.name,
+          email: c.email,
+          rawPoints: pts,
+          points: `${pts} XP`,
+          isMe: c._id.toString() === req.user._id.toString()
+        };
+      })
+    );
+    leaderboardRaw.sort((a, b) => b.rawPoints - a.rawPoints);
+    const leaderboard = leaderboardRaw.map((item, index) => ({
+      ...item,
+      rank: index + 1,
+      badge: index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`
+    }));
+
+    // Dynamic Upcoming Deadlines / Next Actions from actual roadmap nodes
+    const upcomingDeadlines = [];
+    for (const asgn of assignments) {
+      if (asgn.publishedVersion?.nodes) {
+        const nodeProgresses = await NodeProgress.find({ assignment: asgn._id });
+        const progMap = new Map(nodeProgresses.map((p) => [p.nodeId, p]));
+        for (const n of asgn.publishedVersion.nodes) {
+          const p = progMap.get(n.id);
+          if (p?.status === 'in_progress' || p?.status === 'available') {
+            upcomingDeadlines.push({
+              title: n.title,
+              roadmapTitle: asgn.roadmap?.title,
+              estimatedDuration: n.estimatedDuration || '1 week',
+              hasQuiz: n.quizConfig?.isRequired || false,
+              passingPercentage: n.quizConfig?.passingPercentage || 80
+            });
+            if (upcomingDeadlines.length >= 3) break;
+          }
+        }
+      }
+      if (upcomingDeadlines.length >= 3) break;
+    }
+
     // Recent quiz attempts
     const recentAttempts = await QuizAttempt.find({
       clientId: req.user._id
@@ -55,6 +133,10 @@ export async function getClientDashboard(req, res, next) {
       data: {
         assignments,
         stats: statsMap,
+        dynamicXP,
+        streakDays,
+        leaderboard,
+        upcomingDeadlines,
         recentAttempts
       }
     });
@@ -67,7 +149,7 @@ export async function getAssignedRoadmap(req, res, next) {
   try {
     const { assignmentId } = req.params;
 
-    const assignment = await Assignment.findOne({
+    let assignment = await Assignment.findOne({
       _id: assignmentId,
       client: req.user._id
     })
@@ -79,6 +161,19 @@ export async function getAssignedRoadmap(req, res, next) {
         success: false,
         message: 'Assignment not found or unauthorized.'
       });
+    }
+
+    // Dynamic auto-upgrade: If roadmap has a newer published version, sync immediately!
+    if (
+      assignment.roadmap?.currentPublishedVersion &&
+      assignment.publishedVersion?._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString()
+    ) {
+      const latestVersion = await RoadmapVersion.findById(assignment.roadmap.currentPublishedVersion);
+      if (latestVersion) {
+        assignment.publishedVersion = latestVersion;
+        await Assignment.findByIdAndUpdate(assignment._id, { publishedVersion: latestVersion._id });
+        await syncAssignmentProgress(assignment, latestVersion);
+      }
     }
 
     // Fetch all node progress records for this assignment
@@ -131,16 +226,31 @@ export async function getNodeWorkspace(req, res, next) {
   try {
     const { assignmentId, nodeId } = req.params;
 
-    const assignment = await Assignment.findOne({
+    let assignment = await Assignment.findOne({
       _id: assignmentId,
       client: req.user._id
-    }).populate('publishedVersion');
+    })
+      .populate('roadmap')
+      .populate('publishedVersion');
 
     if (!assignment) {
       return res.status(404).json({
         success: false,
         message: 'Assignment not found or unauthorized.'
       });
+    }
+
+    // Auto-upgrade if newer version exists
+    if (
+      assignment.roadmap?.currentPublishedVersion &&
+      assignment.publishedVersion?._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString()
+    ) {
+      const latestVersion = await RoadmapVersion.findById(assignment.roadmap.currentPublishedVersion);
+      if (latestVersion) {
+        assignment.publishedVersion = latestVersion;
+        await Assignment.findByIdAndUpdate(assignment._id, { publishedVersion: latestVersion._id });
+        await syncAssignmentProgress(assignment, latestVersion);
+      }
     }
 
     // Verify node is not locked
