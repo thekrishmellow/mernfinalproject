@@ -1,7 +1,8 @@
+import mongoose from 'mongoose';
 import { Roadmap } from '../models/Roadmap.js';
 import { RoadmapVersion } from '../models/RoadmapVersion.js';
 import { Assignment } from '../models/Assignment.js';
-import { validateRoadmapGraph } from '../services/roadmap/graphValidationService.js';
+import { validateRoadmapGraph, sortRoadmapNodes } from '../services/roadmap/graphValidationService.js';
 import { syncAssignmentProgress } from '../services/progression/progressionService.js';
 
 export async function createRoadmap(req, res, next) {
@@ -233,11 +234,36 @@ export async function publishRoadmap(req, res, next) {
       });
     }
 
-    const nodes = roadmap.draftNodes || [];
+    const rawNodes = roadmap.draftNodes || [];
     const edges = roadmap.draftEdges || [];
 
-    // Graph validation & cycle check
-    const validation = validateRoadmapGraph(nodes, edges);
+    // Normalize nodes from ReactFlow draft format: resolve true type, resources, tasks, quiz
+    const normalizedNodes = rawNodes.map((n) => {
+      const data = n.data || {};
+      const actualType = (n.type && n.type !== 'customNode' ? n.type : data.type) || 'learning';
+      const rawResIds = n.resourceIds || data.resourceIds || [];
+      const validResourceIds = (Array.isArray(rawResIds) ? rawResIds : [])
+        .map((r) => (r && typeof r === 'object' && r._id ? r._id : r))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+      return {
+        id: n.id || data.id,
+        title: n.title || data.title || 'Untitled Module',
+        description: n.description !== undefined ? n.description : (data.description || ''),
+        type: actualType,
+        position: n.position || { x: 0, y: 0 },
+        learningObjectives: n.learningObjectives || data.learningObjectives || [],
+        estimatedDuration: n.estimatedDuration || data.estimatedDuration || '',
+        resourceIds: validResourceIds,
+        tasks: n.tasks || data.tasks || [],
+        quizConfig: n.quizConfig || data.quizConfig || {},
+        completionConditions: n.completionConditions || data.completionConditions || {},
+        completionMessage: n.completionMessage || data.completionMessage || ''
+      };
+    });
+
+    // Graph validation & cycle check on normalized nodes
+    const validation = validateRoadmapGraph(normalizedNodes, edges);
     if (!validation.isValid) {
       return res.status(400).json({
         success: false,
@@ -246,15 +272,18 @@ export async function publishRoadmap(req, res, next) {
       });
     }
 
+    // Topologically and pedagogically sort nodes so curriculum starts from Start -> Core -> Quiz -> Milestone
+    const sortedNodes = sortRoadmapNodes(normalizedNodes, edges);
+
     // Determine latest version number
     const latestVersion = await RoadmapVersion.findOne({ parentRoadmap: roadmapId }).sort({ versionNumber: -1 });
     const nextVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
-    // Create immutable snapshot
+    // Create immutable snapshot with properly normalized & sorted nodes
     const newVersion = await RoadmapVersion.create({
       parentRoadmap: roadmap._id,
       versionNumber: nextVersionNumber,
-      nodes,
+      nodes: sortedNodes,
       edges,
       author: req.user._id,
       publicationNotes: publicationNotes || `Published version ${nextVersionNumber}`

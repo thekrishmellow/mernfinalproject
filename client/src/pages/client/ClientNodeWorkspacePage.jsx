@@ -23,11 +23,34 @@ import {
   Zap,
   Sparkles,
   ChevronRight,
-  Video
+  Video,
+  Image as ImageIcon,
+  FileText
 } from 'lucide-react';
 import { api, getAuthDownloadUrl } from '../../services/api.js';
 import { useToast } from '../../components/ui/Toast.jsx';
 import confetti from 'canvas-confetti';
+
+function isImageResource(res) {
+  if (!res) return false;
+  return (
+    res.type === 'image' ||
+    Boolean(res.mimeType?.startsWith('image/')) ||
+    Boolean(res.originalFilename?.match(/\.(png|jpe?g|webp|gif|svg)$/i)) ||
+    Boolean(res.url?.match(/\.(png|jpe?g|webp|gif|svg)($|\?)/i)) ||
+    Boolean(res.externalUrl?.match(/\.(png|jpe?g|webp|gif|svg)($|\?)/i))
+  );
+}
+
+function isVideoResource(res) {
+  if (!res) return false;
+  return (
+    res.type === 'video' ||
+    Boolean(extractYouTubeId(res.externalUrl || res.url || res.content)) ||
+    Boolean(res.mimeType?.startsWith('video/')) ||
+    Boolean(res.originalFilename?.match(/\.(mp4|webm|ogg|mov)$/i))
+  );
+}
 
 export function ClientNodeWorkspacePage() {
   const { assignmentId, nodeId } = useParams();
@@ -52,7 +75,8 @@ export function ClientNodeWorkspacePage() {
       if (res.success && res.data) {
         setData(res.data);
         if (res.data.resources && res.data.resources.length > 0 && !activeResource) {
-          setActiveResource(res.data.resources[0]);
+          const priority = res.data.resources.find((r) => isVideoResource(r) || isImageResource(r)) || res.data.resources[0];
+          setActiveResource(priority);
         }
       }
     } catch (err) {
@@ -294,14 +318,15 @@ export function ClientNodeWorkspacePage() {
 
               {activeResource && (
                 <div className="flex items-center gap-2">
-                  {activeResource.storageKey && (
+                  {(activeResource.storageKey || activeResource._id) && (
                     <a
                       href={getAuthDownloadUrl(activeResource._id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3.5 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
                     >
-                      <Download className="w-3.5 h-3.5" /> Download PDF
+                      <Download className="w-3.5 h-3.5" />
+                      {isImageResource(activeResource) ? 'View Image' : activeResource.type === 'pdf' ? 'Download PDF' : 'Download File'}
                     </a>
                   )}
                   {activeResource.externalUrl && (
@@ -318,13 +343,47 @@ export function ClientNodeWorkspacePage() {
               )}
             </div>
 
-            {/* In-App Reader (BYJU'S In-App Video / Markdown / PDF style) */}
-            {activeResource && (activeResource.type === 'video' || extractYouTubeId(activeResource.externalUrl)) ? (
+            {/* In-App Reader (BYJU'S In-App Video / Image / Markdown / PDF style) */}
+            {activeResource && isVideoResource(activeResource) ? (
               <ByjuVideoPlayer
                 resource={activeResource}
                 isCompleted={(progress?.completedResources || []).includes(activeResource._id)}
                 onToggleComplete={handleToggleResource}
               />
+            ) : activeResource && isImageResource(activeResource) ? (
+              <div className="space-y-4">
+                <div className="relative group bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center p-2 min-h-[360px] max-h-[65vh]">
+                  <img
+                    src={
+                      activeResource.storageKey || activeResource._id
+                        ? getAuthDownloadUrl(activeResource._id)
+                        : (activeResource.externalUrl || activeResource.url)
+                    }
+                    alt={activeResource.title || 'Lesson Visual Guide'}
+                    className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-2xl transition-transform duration-300 group-hover:scale-[1.01]"
+                    loading="lazy"
+                  />
+                  <a
+                    href={
+                      activeResource.storageKey || activeResource._id
+                        ? getAuthDownloadUrl(activeResource._id)
+                        : (activeResource.externalUrl || activeResource.url)
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute bottom-4 right-4 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Full Resolution
+                  </a>
+                </div>
+
+                {activeResource.description && (
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
+                    <span className="font-bold text-slate-800 block mb-1">Diagram Overview:</span>
+                    {activeResource.description}
+                  </div>
+                )}
+              </div>
             ) : activeResource?.type === 'markdown' ? (
               <div className="max-h-[65vh] overflow-y-auto pr-2 bg-slate-950/95 p-6 rounded-2xl border border-slate-800">
                 <MarkdownViewer content={activeResource.content} />
@@ -455,13 +514,21 @@ export function ClientNodeWorkspacePage() {
                       </span>
                       <div className="truncate">
                         <div className="font-bold truncate">{res.title}</div>
-                        {res.type === 'video' || extractYouTubeId(res.externalUrl) ? (
+                        {isVideoResource(res) ? (
                           <div className="text-[10px] text-red-500 font-bold flex items-center gap-1 font-mono mt-0.5">
-                            <Video className="w-3 h-3 text-red-500" /> Video &bull; {res.estimatedMinutes || 15} mins
+                            <Video className="w-3 h-3 text-red-500 shrink-0" /> Video &bull; {res.estimatedMinutes || 15} mins
+                          </div>
+                        ) : isImageResource(res) ? (
+                          <div className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 font-mono mt-0.5">
+                            <ImageIcon className="w-3 h-3 text-indigo-500 shrink-0" /> Diagram &bull; Image
+                          </div>
+                        ) : res.type === 'pdf' ? (
+                          <div className="text-[10px] text-rose-500 font-bold flex items-center gap-1 font-mono mt-0.5">
+                            <FileText className="w-3 h-3 text-rose-500 shrink-0" /> PDF Document &bull; {res.estimatedMinutes || 10} mins
                           </div>
                         ) : (
                           <div className="text-[10px] text-slate-400 uppercase font-mono mt-0.5">
-                            {res.type} &bull; {res.estimatedMinutes} mins
+                            {res.type || 'resource'} &bull; {res.estimatedMinutes || 5} mins
                           </div>
                         )}
                       </div>

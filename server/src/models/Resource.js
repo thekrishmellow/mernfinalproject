@@ -15,7 +15,7 @@ const resourceSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['markdown', 'pdf', 'text', 'link', 'video', 'book', 'exercise', 'file'],
+      enum: ['markdown', 'pdf', 'text', 'link', 'video', 'book', 'exercise', 'file', 'image'],
       required: true,
       index: true
     },

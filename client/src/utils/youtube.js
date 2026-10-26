@@ -17,21 +17,29 @@ export function extractYouTubeId(url) {
   // - youtu.be/ID
   // - youtube.com/embed/ID
   // - youtube.com/shorts/ID
+  // - youtube.com/live/ID
   // - youtube.com/v/ID
   // - youtube-nocookie.com/embed/ID
   const regExp =
-    /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/i;
+    /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/i;
   const match = trimmed.match(regExp);
   if (match && match[1]) {
     return match[1];
   }
 
-  // Fallback for query param ?v=
+  // Fallback for query param ?v= or embed src
   try {
-    const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    const srcMatch = trimmed.match(/src=["']([^"']+)["']/i);
+    const candidate = srcMatch ? srcMatch[1] : trimmed;
+    const urlObj = new URL(candidate.startsWith('http') ? candidate : `https://${candidate}`);
     const v = urlObj.searchParams.get('v');
     if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) {
       return v;
+    }
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    const lastPart = pathParts[pathParts.length - 1];
+    if (lastPart && /^[a-zA-Z0-9_-]{11}$/.test(lastPart)) {
+      return lastPart;
     }
   } catch (e) {
     // not a valid URL

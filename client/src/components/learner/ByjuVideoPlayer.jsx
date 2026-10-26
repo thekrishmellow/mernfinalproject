@@ -29,7 +29,9 @@ export function ByjuVideoPlayer({
   const [copiedNotes, setCopiedNotes] = useState(false);
   const toast = useToast();
 
-  const videoId = resource ? extractYouTubeId(resource.externalUrl) : null;
+  const rawVideoUrl = resource?.externalUrl || resource?.url || resource?.content || '';
+  const videoId = extractYouTubeId(rawVideoUrl);
+  const isDirectVideo = !videoId && Boolean(rawVideoUrl?.match(/\.(mp4|webm|ogg)$/i) || resource?.mimeType?.startsWith('video/'));
   const storageNotesKey = resource?._id ? `lesson_notes_${resource._id}` : null;
 
   // Load saved learner notes for this lesson
@@ -56,7 +58,7 @@ export function ByjuVideoPlayer({
     setTimeout(() => setCopiedNotes(false), 2000);
   };
 
-  if (!resource || !videoId) {
+  if (!resource || (!videoId && !isDirectVideo && !rawVideoUrl)) {
     return (
       <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200">
         <p className="text-xs text-slate-500">Invalid or missing video stream source.</p>
@@ -64,7 +66,7 @@ export function ByjuVideoPlayer({
     );
   }
 
-  const embedUrl = getYouTubeEmbedUrl(videoId, { autoplay: 0 });
+  const embedUrl = videoId ? getYouTubeEmbedUrl(videoId, { autoplay: 0 }) : rawVideoUrl;
 
   return (
     <div className={`space-y-4 transition-all duration-300 ${isTheater ? 'lg:-mx-12' : ''}`}>
@@ -114,14 +116,29 @@ export function ByjuVideoPlayer({
         </div>
 
         {/* 16:9 Aspect Ratio Cinematic Player */}
-        <div className="relative aspect-video w-full bg-black">
-          <iframe
-            src={embedUrl}
-            title={resource.title}
-            className="w-full h-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
+        <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+          {videoId ? (
+            <iframe
+              src={embedUrl}
+              title={resource.title}
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : isDirectVideo ? (
+            <video
+              src={rawVideoUrl}
+              controls
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <iframe
+              src={rawVideoUrl}
+              title={resource.title}
+              className="w-full h-full border-0"
+              allowFullScreen
+            />
+          )}
         </div>
 
         {/* Player Bottom Bar & Completion Action */}

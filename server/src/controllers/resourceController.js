@@ -1,6 +1,7 @@
 import { Resource } from '../models/Resource.js';
 import { Assignment } from '../models/Assignment.js';
 import { NodeProgress } from '../models/NodeProgress.js';
+import { Roadmap } from '../models/Roadmap.js';
 import { StorageService } from '../services/storage/storageService.js';
 
 export async function createResource(req, res, next) {
@@ -20,10 +21,15 @@ export async function createResource(req, res, next) {
       sizeBytes = saved.sizeBytes;
     }
 
+    const detectedType = type || (req.file ? (
+      req.file.mimetype === 'application/pdf' ? 'pdf' :
+      req.file.mimetype.startsWith('image/') ? 'image' : 'file'
+    ) : 'markdown');
+
     const resource = await Resource.create({
       title,
       description,
-      type: type || (req.file ? (req.file.mimetype === 'application/pdf' ? 'pdf' : 'file') : 'markdown'),
+      type: detectedType,
       content: content || '',
       externalUrl: externalUrl || '',
       storageKey,
@@ -218,18 +224,35 @@ export async function downloadProtectedResource(req, res, next) {
       let isAuthorized = false;
 
       for (const assignment of assignments) {
-        if (!assignment.publishedVersion) continue;
+        let nodeIdsWithResource = [];
 
-        // Check if any node in this version contains this resource
-        const containingNodes = assignment.publishedVersion.nodes.filter(
-          (n) => n.resourceIds && n.resourceIds.map((id) => id.toString()).includes(resourceId)
-        );
+        if (assignment.publishedVersion) {
+          const containingNodes = (assignment.publishedVersion.nodes || []).filter((n) => {
+            const ids = (n.resourceIds || n.data?.resourceIds || []).map((id) =>
+              (id && typeof id === 'object' && id._id ? id._id : id).toString()
+            );
+            return ids.includes(resourceId);
+          });
+          nodeIdsWithResource.push(...containingNodes.map((n) => n.id));
+        }
 
-        if (containingNodes.length > 0) {
+        // Fallback: check parent roadmap draftNodes if not found in snapshot
+        if (nodeIdsWithResource.length === 0 && assignment.roadmap) {
+          const fullRoadmap = await Roadmap.findById(assignment.roadmap);
+          const draftContainingNodes = (fullRoadmap?.draftNodes || []).filter((n) => {
+            const ids = (n.resourceIds || n.data?.resourceIds || []).map((id) =>
+              (id && typeof id === 'object' && id._id ? id._id : id).toString()
+            );
+            return ids.includes(resourceId);
+          });
+          nodeIdsWithResource.push(...draftContainingNodes.map((n) => n.id));
+        }
+
+        if (nodeIdsWithResource.length > 0) {
           // Check if any of these nodes are unlocked for the learner
           const progressRecords = await NodeProgress.find({
             assignment: assignment._id,
-            nodeId: { $in: containingNodes.map((n) => n.id) },
+            nodeId: { $in: nodeIdsWithResource },
             status: { $in: ['available', 'in_progress', 'completed'] }
           });
 
@@ -250,11 +273,17 @@ export async function downloadProtectedResource(req, res, next) {
 
     const { fullPath, createReadStream } = await StorageService.getFile(resource.storageKey);
 
-    const isPdf = resource.mimeType === 'application/pdf';
+    const isInlineType =
+      Boolean(resource.mimeType?.startsWith('image/')) ||
+      resource.mimeType === 'application/pdf' ||
+      Boolean(resource.mimeType?.startsWith('video/')) ||
+      Boolean(resource.mimeType?.startsWith('text/')) ||
+      Boolean(resource.originalFilename?.match(/\.(png|jpe?g|webp|gif|svg|pdf)$/i));
+
     res.setHeader('Content-Type', resource.mimeType || 'application/octet-stream');
     res.setHeader(
       'Content-Disposition',
-      `${isPdf ? 'inline' : 'attachment'}; filename="${encodeURIComponent(resource.originalFilename || 'resource')}"`
+      `${isInlineType ? 'inline' : 'attachment'}; filename="${encodeURIComponent(resource.originalFilename || 'resource')}"`
     );
 
     const stream = createReadStream();

@@ -18,7 +18,8 @@ import {
   Search,
   CheckCircle2,
   Paperclip,
-  Video
+  Video,
+  Image as ImageIcon
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import { useToast } from '../ui/Toast.jsx';
@@ -542,6 +543,7 @@ export function NodeConfigPanel({
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
+                    accept=".pdf,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,.svg"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         handleUploadFile(e.target.files[0]);
@@ -560,7 +562,7 @@ export function NodeConfigPanel({
                         <Upload className="w-4 h-4" />
                       </div>
                       <p className="text-xs font-bold text-slate-800">Upload File</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">PDF or Markdown</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">PDF, Image, or MD</p>
                     </div>
                   )}
                 </div>
@@ -615,6 +617,7 @@ export function NodeConfigPanel({
                   const currentIds = (data.resourceIds || []).map((id) => id.toString());
                   const isSelected = currentIds.includes(res._id.toString());
                   const isVideo = res.type === 'video' || Boolean(extractYouTubeId(res.externalUrl));
+                  const isImage = res.type === 'image' || Boolean(res.mimeType?.startsWith('image/')) || Boolean(res.originalFilename?.match(/\.(png|jpe?g|webp|gif|svg)$/i));
 
                   return (
                     <label
@@ -639,7 +642,13 @@ export function NodeConfigPanel({
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-slate-800 truncate flex items-center justify-between gap-1">
                           <span className="truncate flex items-center gap-1.5">
-                            {isVideo && <Video className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                            {isVideo ? (
+                              <Video className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            ) : isImage ? (
+                              <ImageIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            )}
                             {res.title}
                           </span>
                           {isSelected && (

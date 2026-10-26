@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import { Assignment } from '../models/Assignment.js';
 import { NodeProgress } from '../models/NodeProgress.js';
 import { Quiz } from '../models/Quiz.js';
 import { QuizAttempt } from '../models/QuizAttempt.js';
 import { Resource } from '../models/Resource.js';
 import { User } from '../models/User.js';
+import { Roadmap } from '../models/Roadmap.js';
 import { RoadmapVersion } from '../models/RoadmapVersion.js';
 import {
   verifyNodeAccess,
@@ -13,6 +15,7 @@ import {
   syncAssignmentProgress
 } from '../services/progression/progressionService.js';
 import { prepareLearnerQuestions, gradeQuizAttempt } from '../services/quizzes/quizGradingService.js';
+import { sortRoadmapNodes } from '../services/roadmap/graphValidationService.js';
 
 export async function getClientDashboard(req, res, next) {
   try {
@@ -168,6 +171,7 @@ export async function getAssignedRoadmap(req, res, next) {
 
     // Attach current progress status and lock reasons to each node
     const versionNodes = assignment.publishedVersion?.nodes || [];
+    const versionEdges = assignment.publishedVersion?.edges || [];
     const nodesWithProgress = versionNodes.map((node) => {
       const pr = progressMap.get(node.id);
       return {
@@ -189,6 +193,9 @@ export async function getAssignedRoadmap(req, res, next) {
       };
     });
 
+    // Topologically and pedagogically order nodes from Start/Prerequisites -> Milestones
+    const sortedNodes = sortRoadmapNodes(nodesWithProgress, versionEdges);
+
     return res.json({
       success: true,
       data: {
@@ -196,8 +203,8 @@ export async function getAssignedRoadmap(req, res, next) {
         roadmap: assignment.roadmap,
         version: {
           versionNumber: assignment.publishedVersion.versionNumber,
-          nodes: nodesWithProgress,
-          edges: assignment.publishedVersion.edges
+          nodes: sortedNodes,
+          edges: versionEdges
         }
       }
     });
@@ -248,9 +255,26 @@ export async function getNodeWorkspace(req, res, next) {
       });
     }
 
+    // Safely normalize resource IDs (ObjectIds, strings, or populated objects) from nodeConfig or data
+    let rawResourceIds = (nodeConfig.resourceIds || nodeConfig.data?.resourceIds || [])
+      .map((r) => (r && typeof r === 'object' && r._id ? r._id : r))
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    // Fallback: If this snapshot had empty resourceIds, check parent roadmap draftNodes
+    if (rawResourceIds.length === 0 && assignment.roadmap) {
+      const fullRoadmap = await Roadmap.findById(assignment.roadmap._id || assignment.roadmap);
+      const draftNode = fullRoadmap?.draftNodes?.find((dn) => dn.id === nodeId);
+      if (draftNode) {
+        const draftResIds = draftNode.resourceIds || draftNode.data?.resourceIds || [];
+        rawResourceIds = (Array.isArray(draftResIds) ? draftResIds : [])
+          .map((r) => (r && typeof r === 'object' && r._id ? r._id : r))
+          .filter((id) => mongoose.Types.ObjectId.isValid(id));
+      }
+    }
+
     // Fetch authorized resources
     const resources = await Resource.find({
-      _id: { $in: nodeConfig.resourceIds || [] }
+      _id: { $in: rawResourceIds }
     }).select('-storageKey'); // Never leak internal storage path directly
 
     // Fetch quiz metadata if attached

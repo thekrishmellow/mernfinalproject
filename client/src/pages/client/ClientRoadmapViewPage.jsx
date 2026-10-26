@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { RoadmapCanvas } from '../../components/roadmap/RoadmapCanvas.jsx';
 import { ByjuStepperTrack, ByjuWindingTrail } from '../../components/learner/ByjuJourneyTrack.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { sortRoadmapNodes } from '../../utils/roadmapOrder.js';
 import {
   ArrowLeft,
   Lock,
@@ -72,8 +73,9 @@ export function ClientRoadmapViewPage() {
     );
   }
 
-  const nodes = version?.nodes || [];
+  const rawNodes = version?.nodes || [];
   const edges = version?.edges || [];
+  const nodes = useMemo(() => sortRoadmapNodes(rawNodes, edges), [rawNodes, edges]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
