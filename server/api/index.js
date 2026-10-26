@@ -1,24 +1,20 @@
 import { app } from '../src/app.js';
 import { connectDB } from '../src/config/db.js';
 
-let isConnecting = false;
+let connPromise = null;
 
 async function ensureDB() {
-  if (isConnecting) return;
-  isConnecting = true;
-  try {
-    await connectDB();
-  } catch (err) {
-    console.error('MongoDB connection error:', err.message);
-  } finally {
-    isConnecting = false;
+  if (!connPromise) {
+    connPromise = connectDB().catch((err) => {
+      connPromise = null;
+      console.error('MongoDB connection error:', err.message);
+    });
   }
+  return connPromise;
 }
-
-// Cold start connection
-ensureDB();
 
 export default async function handler(req, res) {
   await ensureDB();
   return app(req, res);
 }
+
