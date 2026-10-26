@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Production-minded full-stack personalized learning roadmap platform with visual builder and gated progression engine",
+  "type": "module",
   "workspaces": [
     "server",
     "client"
