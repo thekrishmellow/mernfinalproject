@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { app } from '../src/app.js';
 import { connectDB } from '../src/config/db.js';
 
@@ -17,6 +18,10 @@ async function ensureDB() {
 }
 
 export default async function handler(req, res) {
+  if (req.url === '/health' || req.url === '/api/health') {
+    return app(req, res);
+  }
+
   try {
     await ensureDB();
   } catch (dbErr) {
