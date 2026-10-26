@@ -47,7 +47,9 @@ export function GoogleAuthCard({ initialRole = 'client', defaultView = 'login' }
   const navigate = useNavigate();
   const toast = useToast();
 
-  const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const envClientId =
+    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+    '888827375910-i4e2l7nl7lsipm675mn0tj4n1svj46ep.apps.googleusercontent.com';
   const effectiveClientId = envClientId || storedClientId;
 
   // Load Google Identity Services script
