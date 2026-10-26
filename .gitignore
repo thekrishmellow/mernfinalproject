@@ -8,6 +8,7 @@ node_modules/
 .env.*.local
 
 # Build Artifacts
+dist/
 client/dist/
 build/
 *.tsbuildinfo
