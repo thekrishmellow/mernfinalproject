@@ -5,6 +5,12 @@ import { cn } from '../../utils/cn.js';
 export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl' }) {
   const modalRef = useRef(null);
   const previousActiveElement = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  // Keep latest onClose callback reference without re-running effects
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -14,7 +20,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current?.();
         return;
       }
 
@@ -46,13 +52,20 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Focus close button or first interactive element after opening
+    // Focus first input or interactive element once upon opening
     const timer = setTimeout(() => {
-      if (modalRef.current) {
-        const firstFocusable = modalRef.current.querySelector(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      if (modalRef.current && !modalRef.current.contains(document.activeElement)) {
+        const firstInput = modalRef.current.querySelector(
+          'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])'
         );
-        firstFocusable?.focus();
+        if (firstInput) {
+          firstInput.focus();
+        } else {
+          const firstFocusable = modalRef.current.querySelector(
+            'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          firstFocusable?.focus();
+        }
       }
     }, 50);
 
@@ -64,7 +77,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
         previousActiveElement.current.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
