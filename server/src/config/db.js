@@ -4,10 +4,14 @@ import { env } from './env.js';
 let mongodInstance = null;
 
 export async function connectDB() {
+  if (mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
+  }
+
   try {
     let uri = env.MONGO_URI;
 
-    if (process.env.NODE_ENV === 'test' || !uri) {
+    if (process.env.NODE_ENV === 'test' || (!uri && !process.env.VERCEL)) {
       if (!mongodInstance) {
         console.log('⚡ Starting in-memory MongoDB server for testing/development...');
         const { MongoMemoryServer } = await import('mongodb-memory-server');
@@ -28,7 +32,7 @@ export async function connectDB() {
     return mongoose.connection;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
-    if (!mongodInstance) {
+    if (!mongodInstance && !process.env.VERCEL && process.env.NODE_ENV !== 'production') {
       console.log('🔄 Attempting fallback to in-memory MongoDB...');
       try {
         const { MongoMemoryServer } = await import('mongodb-memory-server');
