@@ -30,12 +30,11 @@ export function errorHandler(err, req, res, next) {
   }
 
   const statusCode = err.statusCode || 500;
-  const message = err.isOperational || process.env.NODE_ENV === 'development'
-    ? err.message
-    : 'Internal Server Error';
+  const message = err.message || 'Internal Server Error';
 
   res.status(statusCode).json({
     success: false,
-    message
+    message,
+    error: err.name || 'Error'
   });
 }
