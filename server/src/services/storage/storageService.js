@@ -5,9 +5,15 @@ import { Readable } from 'stream';
 import mongoose from 'mongoose';
 import { env } from '../../config/env.js';
 
+const localUploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : env.UPLOAD_DIR;
+
 // Ensure uploads folder exists as local fallback
-if (!fs.existsSync(env.UPLOAD_DIR)) {
-  fs.mkdirSync(env.UPLOAD_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(localUploadDir)) {
+    fs.mkdirSync(localUploadDir, { recursive: true });
+  }
+} catch (e) {
+  // Gracefully ignore filesystem errors in read-only serverless runtimes
 }
 
 export const ALLOWED_MIME_TYPES = [
@@ -89,7 +95,7 @@ export class StorageService {
     }
 
     // 2. Local disk fallback (for offline local development)
-    const destinationPath = path.join(env.UPLOAD_DIR, filename);
+    const destinationPath = path.join(localUploadDir, filename);
     await fs.promises.writeFile(destinationPath, buffer);
 
     console.log(`💾 File saved to local storage: ${filename}`);
@@ -122,7 +128,7 @@ export class StorageService {
 
     // Check local disk fallback
     const sanitizedKey = path.basename(storageKey);
-    const fullPath = path.join(env.UPLOAD_DIR, sanitizedKey);
+    const fullPath = path.join(localUploadDir, sanitizedKey);
 
     if (fs.existsSync(fullPath)) {
       return {
@@ -151,7 +157,7 @@ export class StorageService {
 
       // Also clean up local if exists
       const sanitizedKey = path.basename(storageKey);
-      const fullPath = path.join(env.UPLOAD_DIR, sanitizedKey);
+      const fullPath = path.join(localUploadDir, sanitizedKey);
       if (fs.existsSync(fullPath)) {
         await fs.promises.unlink(fullPath);
       }
