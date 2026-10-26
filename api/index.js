@@ -15,6 +15,15 @@ async function ensureDB() {
 
 export default async function handler(req, res) {
   await ensureDB();
-  return app(req, res);
+  return new Promise((resolve, reject) => {
+    res.on('finish', resolve);
+    res.on('close', resolve);
+    res.on('error', reject);
+    app(req, res, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 }
+
 
