@@ -3,18 +3,22 @@ import { connectDB } from '../src/config/db.js';
 
 let isConnecting = false;
 
-export default async function handler(req, res) {
-  // Ensure DB connection is established
-  if (!isConnecting) {
-    isConnecting = true;
-    try {
-      await connectDB();
-    } catch (err) {
-      console.error('MongoDB connection error in serverless handler:', err.message);
-    } finally {
-      isConnecting = false;
-    }
+async function ensureDB() {
+  if (isConnecting) return;
+  isConnecting = true;
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('MongoDB connection error:', err.message);
+  } finally {
+    isConnecting = false;
   }
+}
 
+// Cold start connection
+ensureDB();
+
+export default async function handler(req, res) {
+  await ensureDB();
   return app(req, res);
 }
