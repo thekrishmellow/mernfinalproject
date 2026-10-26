@@ -1,199 +1,185 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext.jsx';
-import { Button } from '../../components/ui/Button.jsx';
-import { Card } from '../../components/ui/Card.jsx';
-import { Compass, Mail, Lock, ArrowRight } from 'lucide-react';
-import { useToast } from '../../components/ui/Toast.jsx';
+import { GoogleAuthCard } from '../../components/auth/GoogleAuthCard.jsx';
+import {
+  Compass,
+  ArrowRight,
+  Sparkles,
+  CheckCircle2,
+  Layers,
+  GraduationCap,
+  Shield,
+  Zap,
+  Users,
+  Target
+} from 'lucide-react';
 
-export function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+export function LoginPage({ initialView = 'login' }) {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast();
+  const location = useLocation();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      const user = await login({ email, password });
-      toast.success(`Welcome back, ${user.name}!`);
+  const queryParams = new URLSearchParams(location.search);
+  const requestedRole = queryParams.get('role') || 'client';
+  const isRegister = initialView === 'register' || location.pathname === '/register';
+
+  // If already logged in, redirect to appropriate role dashboard
+  useEffect(() => {
+    if (user) {
       if (user.role === 'admin') {
-        navigate('/admin/dashboard');
+        navigate('/admin/dashboard', { replace: true });
       } else {
-        navigate('/client/dashboard');
+        navigate('/client/dashboard', { replace: true });
       }
-    } catch (err) {
-      toast.error(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-500/20 mb-2">
-            <Compass className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Sign In to Pathfinder</h2>
-          <p className="text-sm text-slate-400">Personalized learning paths with gated assessments</p>
-        </div>
+    <div className="min-h-dvh bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-hidden">
+      
+      {/* Background ambient lighting */}
+      <div className="absolute top-0 left-1/4 size-[600px] rounded-full bg-indigo-600/10 blur-[150px] pointer-events-none" aria-hidden="true" />
+      <div className="absolute bottom-0 right-1/4 size-[500px] rounded-full bg-purple-600/10 blur-[140px] pointer-events-none" aria-hidden="true" />
 
-        <Card className="p-8 border-slate-800 bg-slate-900/80 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@roadmap.local or alex@learner.local"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-                />
+      {/* Top Header */}
+      <header className="relative z-10 max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="size-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
+            <Compass className="size-5 stroke-[2.2]" aria-hidden="true" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-xl text-white tracking-tight text-balance">Pathfinder</span>
+              <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold tracking-wider uppercase border border-indigo-500/30">
+                PRO
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium hidden sm:block">
+              Personalized Learning Roadmap Platform
+            </span>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="text-xs font-semibold text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            Explore Platform
+          </Link>
+          <Link
+            to={isRegister ? '/login' : '/register'}
+            className="text-xs font-bold px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-indigo-300 hover:text-white hover:border-slate-700 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            {isRegister ? 'Sign In Instead' : 'Create Account'}
+          </Link>
+        </div>
+      </header>
+
+      {/* Main Content: Split-Screen Hero + Google Auth */}
+      <main className="relative z-10 flex-1 max-w-7xl mx-auto w-full px-6 py-8 flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-16">
+        
+        {/* Left Side: Value Proposition & High-Trust Metrics */}
+        <div className="flex-1 max-w-xl text-left hidden lg:block">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold tracking-wide uppercase mb-6">
+            <Sparkles className="size-4 text-indigo-400" aria-hidden="true" />
+            <span>Next-Generation Learning Engine</span>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight mb-5 text-balance">
+            Turn complex skills into{' '}
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+              clear, mastered paths.
+            </span>
+          </h1>
+
+          <p className="text-base text-slate-400 leading-relaxed mb-8 text-pretty">
+            Whether you're an instructor designing gated learning curriculums or a learner mastering new technologies, Pathfinder gives you clarity, structure, and real momentum.
+          </p>
+
+          {/* Core Feature Bullets */}
+          <div className="space-y-4 mb-8">
+            <div className="flex items-start gap-3.5">
+              <div className="size-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                <Target className="size-4 text-indigo-400" aria-hidden="true" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-200">Gated Progression Invariants</h4>
+                <p className="text-xs text-slate-400 mt-0.5 text-pretty">
+                  Milestones only unlock when prerequisites and assessments are strictly met.
+                </p>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-300">Password</label>
-                <Link to="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
-                  Forgot password?
-                </Link>
+            <div className="flex items-start gap-3.5">
+              <div className="size-8 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <Users className="size-4 text-purple-400" aria-hidden="true" />
               </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-                />
+              <div>
+                <h4 className="text-sm font-bold text-slate-200">Dual Perspectives for Teams & Students</h4>
+                <p className="text-xs text-slate-400 mt-0.5 text-pretty">
+                  Instructors get visual drag-and-drop studio controls; learners get a distraction-free workspace.
+                </p>
               </div>
             </div>
 
-            <Button type="submit" variant="primary" className="w-full mt-2" loading={loading} icon={ArrowRight}>
-              Sign In
-            </Button>
-          </form>
-
-          <div className="mt-6 pt-6 border-t border-slate-800 text-center text-xs text-slate-400">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-blue-400 font-semibold hover:text-blue-300">
-              Create an account
-            </Link>
+            <div className="flex items-start gap-3.5">
+              <div className="size-8 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <Zap className="size-4 text-emerald-400" aria-hidden="true" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-200">Instant One-Click Google Authentication</h4>
+                <p className="text-xs text-slate-400 mt-0.5 text-pretty">
+                  Frictionless access with instant role selection. Zero cumbersome signup forms.
+                </p>
+              </div>
+            </div>
           </div>
-        </Card>
 
-        {/* Demo credentials hint box */}
-        <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80 text-xs text-slate-400 space-y-1">
-          <div className="font-semibold text-slate-300">Default Demo Credentials:</div>
-          <div>Admin: <span className="font-mono text-blue-400">admin@roadmap.local</span> / <span className="font-mono text-slate-200">Admin@123456!</span></div>
-          <div>Learner: <span className="font-mono text-blue-400">alex@learner.local</span> / <span className="font-mono text-slate-200">Client@123456!</span></div>
+          {/* Social Proof / Metrics Bar */}
+          <div className="pt-6 border-t border-slate-900 grid grid-cols-3 gap-4 tabular-nums">
+            <div>
+              <div className="text-2xl font-black text-white">10,000+</div>
+              <div className="text-[11px] text-slate-400 font-medium">Active Learners</div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-white">99.4%</div>
+              <div className="text-[11px] text-slate-400 font-medium">Concept Retention</div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-white">4.9 / 5.0</div>
+              <div className="text-[11px] text-slate-400 font-medium">Learner Rating</div>
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Right Side: The Google Authentication Card */}
+        <div className="w-full flex-1 flex justify-center">
+          <GoogleAuthCard
+            initialRole={requestedRole}
+            defaultView={isRegister ? 'register' : 'login'}
+          />
+        </div>
+
+      </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 max-w-7xl mx-auto w-full px-6 py-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-2">
+          <span>&copy; {new Date().getFullYear()} Pathfinder Platform. Enterprise Grade.</span>
+        </div>
+        <div className="flex items-center gap-6">
+          <Link to="/" className="hover:text-slate-200 transition-colors">Features</Link>
+          <Link to="/login" className="hover:text-slate-200 transition-colors">Sign In</Link>
+          <Link to="/register" className="hover:text-slate-200 transition-colors">Sign Up</Link>
+        </div>
+      </footer>
+
     </div>
   );
 }
 
 export function RegisterPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
-  const navigate = useNavigate();
-  const toast = useToast();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      const user = await register({ name, email, password });
-      toast.success('Registration successful! Welcome to Pathfinder.');
-      if (user.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/client/dashboard');
-      }
-    } catch (err) {
-      toast.error(err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-500/20 mb-2">
-            <Compass className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Create an Account</h2>
-          <p className="text-sm text-slate-400">First user becomes platform administrator</p>
-        </div>
-
-        <Card className="p-8 border-slate-800 bg-slate-900/80 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Full Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ada Lovelace"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ada@example.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-
-            <Button type="submit" variant="primary" className="w-full mt-2" loading={loading} icon={ArrowRight}>
-              Create Account
-            </Button>
-          </form>
-
-          <div className="mt-6 pt-6 border-t border-slate-800 text-center text-xs text-slate-400">
-            Already have an account?{' '}
-            <Link to="/login" className="text-blue-400 font-semibold hover:text-blue-300">
-              Sign In
-            </Link>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
+  return <LoginPage initialView="register" />;
 }

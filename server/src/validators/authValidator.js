@@ -4,7 +4,21 @@ export const registerSchema = {
   body: z.object({
     name: z.string().min(2, 'Name must be at least 2 characters').max(100),
     email: z.string().email('Valid email address is required').toLowerCase().trim(),
-    password: z.string().min(8, 'Password must be at least 8 characters')
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    role: z.enum(['admin', 'client']).optional()
+  })
+};
+
+export const magicLoginSchema = {
+  body: z.object({
+    email: z.string().email('Valid email address is required').toLowerCase().trim(),
+    role: z.enum(['admin', 'client']).optional()
+  })
+};
+
+export const verifyMagicLoginSchema = {
+  body: z.object({
+    token: z.string().min(10, 'Login token is required')
   })
 };
 

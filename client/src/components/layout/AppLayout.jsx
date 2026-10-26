@@ -10,7 +10,7 @@ export function AppLayout() {
 
   if (isLearnerSpace) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#F8F9FE] text-slate-800">
+      <div className="min-h-dvh flex flex-col bg-[#F8F9FE] text-slate-800">
         <LearnerNavbar />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
@@ -20,7 +20,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="min-h-dvh flex flex-col bg-[#F8F9FE] text-slate-800">
       <Navbar />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />

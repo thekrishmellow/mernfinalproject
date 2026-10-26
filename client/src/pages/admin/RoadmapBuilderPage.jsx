@@ -125,48 +125,50 @@ export function RoadmapBuilderPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col space-y-3">
+    <div className="h-[calc(100vh-6.5rem)] flex flex-col space-y-3">
       {/* Top Studio Control Bar */}
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-5 py-3.5 rounded-3xl bg-white border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3.5">
           <Link to="/admin/roadmaps">
-            <Button variant="ghost" size="sm" icon={ArrowLeft}>
+            <Button variant="secondary" size="sm" icon={ArrowLeft} className="!rounded-xl">
               Back
             </Button>
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">{roadmap?.title}</h1>
-              <Badge variant={roadmap?.status === 'published' ? 'success' : 'warning'}>
+              <h1 className="text-base font-extrabold text-slate-850 tracking-tight">{roadmap?.title}</h1>
+              <Badge variant={roadmap?.status === 'published' ? 'success' : 'warning'} className="font-bold">
                 {roadmap?.status}
               </Badge>
               {hasUnsavedChanges && (
-                <span className="text-[11px] text-amber-400 font-medium animate-pulse">
-                  &bull; Unsaved changes
+                <span className="text-[11px] text-amber-600 font-bold animate-pulse px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200/60">
+                  Unsaved changes
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">
-              {nodes.length} nodes &bull; {edges.length} connections &bull; {versions.length} published snapshot(s)
+            <p className="text-[11px] text-slate-400 font-medium">
+              {nodes.length} curriculum node{nodes.length !== 1 ? 's' : ''} &bull; {edges.length} link{edges.length !== 1 ? 's' : ''} &bull; {versions.length} published snapshot{versions.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <Button
             variant="secondary"
             size="sm"
             onClick={handleSaveDraft}
             loading={isSaving}
             icon={Save}
+            className="font-bold"
           >
             Save Draft
           </Button>
           <Button
-            variant="accent"
+            variant="primary"
             size="sm"
             onClick={() => setIsPublishModalOpen(true)}
             icon={CheckCircle2}
+            className="font-bold"
           >
             Publish Version
           </Button>
@@ -185,6 +187,7 @@ export function RoadmapBuilderPage() {
           isPublishing={isPublishing}
           availableResources={resources}
           availableQuizzes={quizzes}
+          onResourceCreated={(newRes) => setResources((prev) => [newRes, ...prev])}
         />
       </div>
 
@@ -195,14 +198,14 @@ export function RoadmapBuilderPage() {
         title="Publish Immutable Roadmap Version"
       >
         <div className="space-y-4">
-          <p className="text-xs text-slate-300">
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
             Publishing creates a permanent snapshot of this canvas structure. Active client assignments
             reference this immutable version. The backend progression engine will validate the dependency graph
             for cycles and valid prerequisites.
           </p>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               Release Notes / Version Description
             </label>
             <input
@@ -210,27 +213,27 @@ export function RoadmapBuilderPage() {
               value={publicationNotes}
               onChange={(e) => setPublicationNotes(e.target.value)}
               placeholder="e.g. Added Async/Await gate and updated quiz passing score"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-purple-500 font-medium"
             />
           </div>
 
           {validationErrors.length > 0 && (
-            <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-800/40 text-xs text-rose-300 space-y-1">
-              <div className="font-semibold flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-rose-400" /> Graph Structural Validation Errors:
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-500" /> Graph Structural Validation Errors:
               </div>
               {validationErrors.map((err, idx) => (
-                <div key={idx}>&bull; {err}</div>
+                <div key={idx} className="font-medium">&bull; {err}</div>
               ))}
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
             <Button variant="secondary" size="sm" onClick={() => setIsPublishModalOpen(false)}>
               Cancel
             </Button>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
               onClick={handleConfirmPublish}
               loading={isPublishing}

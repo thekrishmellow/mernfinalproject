@@ -47,7 +47,10 @@ export async function createRoadmap(req, res, next) {
 export async function getRoadmaps(req, res, next) {
   try {
     const { status, visibility, search, category, page = 1, limit = 20 } = req.query;
-    const query = {};
+    // Strict isolation: Admin authors only view their own roadmaps
+    const query = {
+      owner: req.user._id
+    };
 
     if (status) query.status = status;
     if (visibility) query.visibility = visibility;
@@ -112,6 +115,14 @@ export async function getRoadmapById(req, res, next) {
       });
     }
 
+    // Ensure admin user only views their own roadmaps
+    if (req.user.role === 'admin' && !roadmap.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not own this roadmap.'
+      });
+    }
+
     const versions = await RoadmapVersion.find({ parentRoadmap: roadmapId })
       .sort({ versionNumber: -1 })
       .select('versionNumber publicationNotes createdAt');
@@ -137,6 +148,13 @@ export async function updateRoadmap(req, res, next) {
       return res.status(404).json({
         success: false,
         message: 'Roadmap not found.'
+      });
+    }
+
+    if (!roadmap.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to edit this roadmap.'
       });
     }
 
@@ -172,6 +190,13 @@ export async function saveDraft(req, res, next) {
       });
     }
 
+    if (!roadmap.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to edit this roadmap draft.'
+      });
+    }
+
     roadmap.draftNodes = nodes || [];
     roadmap.draftEdges = edges || [];
     await roadmap.save();
@@ -198,6 +223,13 @@ export async function publishRoadmap(req, res, next) {
       return res.status(404).json({
         success: false,
         message: 'Roadmap not found.'
+      });
+    }
+
+    if (!roadmap.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to publish this roadmap.'
       });
     }
 
@@ -295,6 +327,22 @@ export async function duplicateRoadmap(req, res, next) {
 export async function deleteRoadmap(req, res, next) {
   try {
     const { roadmapId } = req.params;
+    const roadmap = await Roadmap.findById(roadmapId);
+
+    if (!roadmap) {
+      return res.status(404).json({
+        success: false,
+        message: 'Roadmap not found.'
+      });
+    }
+
+    if (!roadmap.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to delete this roadmap.'
+      });
+    }
+
     const activeAssignments = await Assignment.countDocuments({ roadmap: roadmapId, status: 'active' });
 
     if (activeAssignments > 0) {
@@ -313,3 +361,4 @@ export async function deleteRoadmap(req, res, next) {
     next(error);
   }
 }
+

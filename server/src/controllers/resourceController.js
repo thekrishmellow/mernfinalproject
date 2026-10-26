@@ -49,7 +49,10 @@ export async function createResource(req, res, next) {
 export async function getResources(req, res, next) {
   try {
     const { type, search, page = 1, limit = 50 } = req.query;
-    const query = {};
+    // Strict isolation: only show resources uploaded by this admin
+    const query = {
+      uploader: req.user._id
+    };
 
     if (type) query.type = type;
     if (search) {
@@ -95,6 +98,13 @@ export async function getResourceById(req, res, next) {
       });
     }
 
+    if (req.user.role === 'admin' && !resource.uploader.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not own this resource.'
+      });
+    }
+
     return res.json({
       success: true,
       data: { resource }
@@ -113,6 +123,13 @@ export async function updateResource(req, res, next) {
       return res.status(404).json({
         success: false,
         message: 'Resource not found.'
+      });
+    }
+
+    if (!resource.uploader.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to edit this resource.'
       });
     }
 
@@ -152,6 +169,13 @@ export async function deleteResource(req, res, next) {
       });
     }
 
+    if (!resource.uploader.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to delete this resource.'
+      });
+    }
+
     if (resource.storageKey) {
       await StorageService.deleteFile(resource.storageKey);
     }
@@ -166,6 +190,7 @@ export async function deleteResource(req, res, next) {
     next(error);
   }
 }
+
 
 /**
  * Streams protected resource file with authorization verification

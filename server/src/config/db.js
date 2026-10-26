@@ -7,20 +7,22 @@ export async function connectDB() {
   try {
     let uri = env.MONGO_URI;
 
-    if (!uri) {
-      console.log('⚡ MONGO_URI not provided. Starting in-memory MongoDB server for zero-config development...');
-      const { MongoMemoryServer } = await import('mongodb-memory-server');
-      mongodInstance = await MongoMemoryServer.create({
-        instance: {
-          dbName: 'personalized_roadmap'
-        }
-      });
+    if (process.env.NODE_ENV === 'test' || !uri) {
+      if (!mongodInstance) {
+        console.log('⚡ Starting in-memory MongoDB server for testing/development...');
+        const { MongoMemoryServer } = await import('mongodb-memory-server');
+        mongodInstance = await MongoMemoryServer.create({
+          instance: {
+            dbName: 'personalized_roadmap'
+          }
+        });
+      }
       uri = mongodInstance.getUri();
       console.log(`✅ In-memory MongoDB running at: ${uri}`);
     }
 
     mongoose.set('strictQuery', true);
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
 
     console.log(`✅ MongoDB connected successfully to ${mongoose.connection.host || 'in-memory instance'}`);
     return mongoose.connection;

@@ -21,7 +21,12 @@ export const env = {
   COOKIE_SECURE: process.env.NODE_ENV === 'production',
   UPLOAD_DIR: process.env.UPLOAD_DIR || path.resolve(__dirname, '../../uploads'),
   MAX_FILE_SIZE_MB: parseInt(process.env.MAX_FILE_SIZE_MB || '15', 10),
-  STORAGE_ADAPTER: process.env.STORAGE_ADAPTER || 'local', // 'local' or 's3' (extensible)
+  STORAGE_ADAPTER: process.env.STORAGE_ADAPTER || 'gridfs', // 'gridfs' (Atlas Cloud), 'cloudinary', 's3', 'local'
+  CLOUDINARY_URL: process.env.CLOUDINARY_URL || '',
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || '',
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || '',
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || '',
+
   EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'development', // 'development', 'smtp'
   SMTP_HOST: process.env.SMTP_HOST || '',
   SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),

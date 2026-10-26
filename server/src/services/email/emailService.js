@@ -64,6 +64,35 @@ export class EmailService {
     return this.sendMail({ to, subject, text, html });
   }
 
+  /**
+   * Sends a magic login link to a user's email
+   */
+  static async sendLoginLinkEmail({ to, loginLink, name, role }) {
+    const roleLabel = role === 'admin' ? 'Admin Studio' : 'Learner Dashboard';
+    const subject = `Your Pathfinder Magic Sign-In Link [${roleLabel}]`;
+    const text = `Hello ${name || 'there'},\n\nClick the link below to securely log in to your Pathfinder ${roleLabel}:\n${loginLink}\n\nThis login link expires in 15 minutes.\n\nHappy learning!`;
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Sign In to Pathfinder</h2>
+        <p style="color: #475569; font-size: 15px;">Hello <strong>${name || 'there'}</strong>,</p>
+        <p style="color: #475569; font-size: 15px;">
+          Click the button below to sign in directly to your <strong>${roleLabel}</strong>:
+        </p>
+        <div style="margin: 28px 0;">
+          <a href="${loginLink}" style="background-color: #f59e0b; color: #0f172a; padding: 13px 26px; text-decoration: none; border-radius: 9999px; font-weight: 700; font-size: 14px; display: inline-block;">
+            Sign In to ${roleLabel} &rarr;
+          </a>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">Or copy and paste this link in your browser:<br/><a href="${loginLink}" style="color: #d97706; word-break: break-all;">${loginLink}</a></p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+          This single-use link expires in 15 minutes. If you did not request this link, you can safely ignore this email.
+        </p>
+      </div>
+    `;
+
+    return this.sendMail({ to, subject, text, html });
+  }
+
   static async sendMail({ to, subject, text, html }) {
     const emailRecord = {
       to,

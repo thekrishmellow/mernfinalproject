@@ -197,7 +197,10 @@ export async function bulkAssignRoadmap(req, res, next) {
 export async function getAssignments(req, res, next) {
   try {
     const { roadmapId, status, search, page = 1, limit = 50 } = req.query;
-    const query = {};
+    // Strict isolation: only show assignments initiated by this author/admin
+    const query = {
+      assignedBy: req.user._id
+    };
 
     if (roadmapId) query.roadmap = roadmapId;
     if (status) query.status = status;
@@ -244,6 +247,13 @@ export async function revokeAssignment(req, res, next) {
       });
     }
 
+    if (!assignment.assignedBy.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not manage this assignment.'
+      });
+    }
+
     assignment.status = 'revoked';
     await assignment.save();
 
@@ -268,6 +278,13 @@ export async function resendInvitation(req, res, next) {
       return res.status(400).json({
         success: false,
         message: 'No pending invitation found for this assignment.'
+      });
+    }
+
+    if (!assignment.assignedBy.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not manage this assignment.'
       });
     }
 

@@ -6,7 +6,8 @@ import {
   updateResourceCompletion,
   updateTaskCompletion,
   startQuizAttempt,
-  submitQuizAttempt
+  submitQuizAttempt,
+  acceptAssignedRoadmap
 } from '../controllers/clientLearningController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { quizSubmissionLimiter } from '../middleware/rateLimiter.js';
@@ -18,6 +19,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/dashboard', getClientDashboard);
+router.post('/assignments/:assignmentId/accept', acceptAssignedRoadmap);
 router.get('/assignments/:assignmentId/roadmap', getAssignedRoadmap);
 router.get('/assignments/:assignmentId/nodes/:nodeId', getNodeWorkspace);
 

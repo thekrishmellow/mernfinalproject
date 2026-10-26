@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@designcodeio/threeui": "^1.2.0",
     "@xyflow/react": "^12.4.2",
     "axios": "^1.7.9",
     "canvas-confetti": "^1.9.4",
@@ -20,7 +21,8 @@
     "react-markdown": "^9.0.3",
     "react-router-dom": "^6.28.1",
     "remark-gfm": "^4.0.0",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

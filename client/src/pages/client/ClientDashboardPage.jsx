@@ -23,40 +23,59 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { api } from '../../services/api.js';
+import { useToast } from '../../components/ui/Toast.jsx';
+
 
 export function ClientDashboardPage() {
   const { user } = useAuth();
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [activeRoadmapData, setActiveRoadmapData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [acceptingId, setAcceptingId] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get('/client/dashboard');
-        if (res.success && res.data) {
-          setData(res.data);
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/client/dashboard');
+      if (res.success && res.data) {
+        setData(res.data);
 
-          // If assignments exist, fetch the first one's full roadmap nodes for the Byju stepper
-          const firstAssignment = res.data.assignments?.[0];
-          if (firstAssignment) {
-            const rmRes = await api.get(`/client/assignments/${firstAssignment._id}/roadmap`);
-            if (rmRes.success && rmRes.data) {
-              setActiveRoadmapData(rmRes.data);
-            }
+        // If assignments exist, fetch the first active one's full roadmap nodes for the Byju stepper
+        const activeAsgn = res.data.assignments?.find((a) => a.status === 'active') || res.data.assignments?.[0];
+        if (activeAsgn) {
+          const rmRes = await api.get(`/client/assignments/${activeAsgn._id}/roadmap`);
+          if (rmRes.success && rmRes.data) {
+            setActiveRoadmapData(rmRes.data);
           }
         }
-      } catch (err) {
-        console.error('Failed to load learner dashboard:', err);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error('Failed to load learner dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboard();
   }, []);
+
+  const handleAcceptAssignment = async (assignmentId) => {
+    try {
+      setAcceptingId(assignmentId);
+      const res = await api.post(`/client/assignments/${assignmentId}/accept`);
+      toast.success(res.message || 'Roadmap accepted! Your modules are ready.');
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err.message || 'Failed to accept roadmap');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -72,12 +91,40 @@ export function ClientDashboardPage() {
   const assignments = data?.assignments || [];
   const stats = data?.stats || {};
   const recentAttempts = data?.recentAttempts || [];
-  const dynamicXP = data?.dynamicXP || 0;
-  const streakDays = data?.streakDays || 1;
-  const leaderboard = data?.leaderboard || [];
-  const upcomingDeadlines = data?.upcomingDeadlines || [];
+  const activityDates = data?.activityDates || [];
   const primaryAssignment = assignments[0];
   const roadmapNodes = activeRoadmapData?.version?.nodes || [];
+
+  // Monthly calendar calculations
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun, 1 = Mon...
+  const todayDateNum = today.getDate();
+
+  // Active contribution days from backend activity timestamps
+  const activeDaysSet = new Set(
+    activityDates
+      .map((dStr) => {
+        const d = new Date(dStr);
+        if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+          return d.getDate();
+        }
+        return null;
+      })
+      .filter(Boolean)
+  );
+  // Also include any recent attempt days from current month
+  recentAttempts.forEach((att) => {
+    const d = new Date(att.completedAt || att.createdAt);
+    if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+      activeDaysSet.add(d.getDate());
+    }
+  });
+
+  const totalNodesCount = (stats.completed || 0) + (stats.available || 0) + (stats.in_progress || 0) + (stats.locked || 0);
+  const completionPercentage = totalNodesCount > 0 ? Math.round(((stats.completed || 0) / totalNodesCount) * 100) : 0;
 
   // Dynamically compute available categories from user assignments
   const availableCategories = [
@@ -155,26 +202,26 @@ export function ClientDashboardPage() {
           )}
         </div>
 
-        {/* Mini Daily Motivation & Quick Stats Card */}
+        {/* Curriculum Progress Breakdown Card (Clean, purposeful metrics) */}
         <div className="rounded-3xl p-6 bg-white border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Your Progress</span>
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[11px] flex items-center gap-1">
-              <Zap className="w-3 h-3 fill-amber-500" /> {streakDays} Day Streak
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Curriculum Progress</span>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[11px]">
+              {completionPercentage}% Mastered
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100/80">
-              <div className="text-xl font-black text-amber-600 font-mono">{stats.completed || 0}</div>
+            <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100/80">
+              <div className="text-xl font-black text-emerald-600 font-mono">{stats.completed || 0}</div>
               <div className="text-[11px] text-slate-500 font-semibold mt-0.5">Completed</div>
             </div>
             <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100/80">
               <div className="text-xl font-black text-blue-600 font-mono">{stats.available || 0}</div>
-              <div className="text-[11px] text-slate-500 font-semibold mt-0.5">Available</div>
+              <div className="text-[11px] text-slate-500 font-semibold mt-0.5">Ready to Learn</div>
             </div>
-            <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-100/80">
-              <div className="text-xl font-black text-purple-600 font-mono">{stats.in_progress || 0}</div>
+            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100/80">
+              <div className="text-xl font-black text-amber-600 font-mono">{stats.in_progress || 0}</div>
               <div className="text-[11px] text-slate-500 font-semibold mt-0.5">In Progress</div>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
@@ -185,18 +232,19 @@ export function ClientDashboardPage() {
 
           <div className="pt-3 border-t border-slate-100">
             <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-              <span>Earned Points</span>
-              <span className="text-amber-600 font-bold font-mono">{dynamicXP} XP</span>
+              <span>Overall Track Completion</span>
+              <span className="text-emerald-600 font-bold font-mono">{completionPercentage}%</span>
             </div>
             <div className="w-full h-2 bg-slate-100 rounded-full mt-2 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(15, dynamicXP % 500 / 5))}%` }}
+                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                style={{ width: `${completionPercentage}%` }}
               />
             </div>
           </div>
         </div>
       </div>
+
 
       {/* 2. BYJU'S Iconic Milestone Stepper Track (Warmup ➔ Strides ➔ Sprint ➔ Laps ➔ Race) */}
       {roadmapNodes.length > 0 && (
@@ -232,7 +280,7 @@ export function ClientDashboardPage() {
         </div>
       )}
 
-      {/* 4. Grid of Assigned Pathways & Right Sidebar Schedule/Leaderboard (Images 1 & 2) */}
+      {/* 4. Grid of Assigned Pathways & Right Sidebar Activity Calendar */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left 2 Cols: Assigned Pathways */}
         <div className="lg:col-span-2 space-y-6">
@@ -261,168 +309,245 @@ export function ClientDashboardPage() {
           </div>
 
           <div className="space-y-4">
-            {filteredAssignments.map((a, idx) => {
-              const ringColors = ['#F59E0B', '#6C3483', '#06B6D4', '#10B981'];
-              const color = ringColors[idx % ringColors.length];
-
-              return (
-                <div
-                  key={a._id}
-                  className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-                >
-                  <div className="flex items-start sm:items-center gap-4">
-                    {/* Course Icon Badge */}
-                    <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-2xl shrink-0 group-hover:scale-105 transition-transform">
-                      {idx === 0 ? '💻' : '⚡'}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
-                          {a.roadmap?.category || 'Curriculum'}
-                        </span>
-                        <span className="text-xs text-slate-400 font-mono">
-                          v{a.publishedVersion?.versionNumber || 1}
-                        </span>
-                      </div>
-                      <h3 className="text-base font-bold text-slate-800 leading-snug">{a.roadmap?.title}</h3>
-                      <p className="text-xs text-slate-500 line-clamp-1">
-                        {a.roadmap?.description || 'Study this structured learning pathway.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-5 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <ProgressRing
-                        percentage={a.progressPercentage || 0}
-                        size={52}
-                        strokeWidth={5}
-                        strokeColor={color}
-                        trackColor="#F1F5F9"
-                        textColor="text-slate-800"
-                      />
-                      <div className="text-left">
-                        <div className="text-xs font-bold text-slate-800">{a.progressPercentage || 0}%</div>
-                        <div className="text-[10px] text-slate-400">Progress</div>
-                      </div>
-                    </div>
-
-                    <Link to={`/client/assignments/${a._id}/roadmap`}>
-                      <button className="px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5">
-                        Open Path <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </Link>
-                  </div>
+            {filteredAssignments.length === 0 ? (
+              <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm text-center space-y-3">
+                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+                  📚
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right Col: Schedule & Leaderboard (Image 1 & 2) */}
-        <div className="space-y-6">
-          {/* Calendar / Study Schedule Card (Image 1 top right) */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-purple-600" />
-                Study Calendar
-              </h3>
-              <span className="text-xs font-bold text-purple-600">Oct 2026</span>
-            </div>
-
-            {/* Calendar Mini Grid */}
-            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-400">
-              <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-              {[...Array(31)].map((_, i) => {
-                const day = i + 1;
-                const isToday = day === 13;
-                const hasSchedule = [7, 13, 16, 26].includes(day);
+                <h3 className="text-base font-bold text-slate-800">No Enrolled Courses Found</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  {assignments.length === 0
+                    ? `You don't have any roadmaps assigned yet. Once your instructor publishes a learning roadmap to ${user?.email}, it will appear here immediately.`
+                    : 'No courses found in this category. Try selecting "All".'}
+                </p>
+              </div>
+            ) : (
+              filteredAssignments.map((a, idx) => {
+                const ringColors = ['#F59E0B', '#6C3483', '#06B6D4', '#10B981'];
+                const color = ringColors[idx % ringColors.length];
+                const isPending = a.status === 'pending_acceptance';
 
                 return (
                   <div
-                    key={i}
-                    className={`h-7 flex items-center justify-center rounded-full text-xs transition-all ${
-                      isToday
-                        ? 'bg-amber-500 text-white font-bold shadow-md shadow-amber-500/30'
-                        : hasSchedule
-                        ? 'text-amber-600 font-bold bg-amber-50'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
+                    key={a._id}
+                    className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
                   >
-                    {day}
+                    <div className="flex items-start sm:items-center gap-4">
+                      {/* Course Icon Badge */}
+                      <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-2xl shrink-0 group-hover:scale-105 transition-transform">
+                        {idx === 0 ? '💻' : '⚡'}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
+                            {a.roadmap?.category || 'Curriculum'}
+                          </span>
+                          <span className="text-xs text-slate-400 font-mono">
+                            v{a.publishedVersion?.versionNumber || 1}
+                          </span>
+                          {isPending && (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                              Invitation Ready
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-base font-bold text-slate-800 leading-snug">{a.roadmap?.title}</h3>
+                        <p className="text-xs text-slate-500 line-clamp-1">
+                          {a.roadmap?.description || 'Study this structured learning pathway.'}
+                        </p>
+                        {a.assignedBy?.name && (
+                          <p className="text-[11px] text-slate-400">
+                            Assigned by: <span className="font-semibold text-slate-600">{a.assignedBy.name}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-5 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <ProgressRing
+                          percentage={a.progressPercentage || 0}
+                          size={52}
+                          strokeWidth={5}
+                          strokeColor={color}
+                          trackColor="#F1F5F9"
+                          textColor="text-slate-800"
+                        />
+                        <div className="text-left">
+                          <div className="text-xs font-bold text-slate-800">{a.progressPercentage || 0}%</div>
+                          <div className="text-[10px] text-slate-400">Progress</div>
+                        </div>
+                      </div>
+
+                      {isPending ? (
+                        <button
+                          onClick={() => handleAcceptAssignment(a._id)}
+                          disabled={acceptingId === a._id}
+                          className="px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-900 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
+                        >
+                          {acceptingId === a._id ? 'Accepting...' : 'Accept Roadmap'}
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <Link to={`/client/assignments/${a._id}/roadmap`}>
+                          <button className="px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5">
+                            Open Path <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 );
-              })}
+              })
+            )}
+          </div>
+        </div>
+
+
+        {/* Right Col: Study Activity & Contribution Calendar */}
+        <div className="space-y-6">
+          {/* Study Activity & Contribution Calendar */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 leading-tight">Study Activity</h3>
+                  <p className="text-[10px] text-slate-400">Contribution & progress mapping</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-purple-600 px-2.5 py-1 rounded-full bg-purple-50">
+                {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </span>
             </div>
 
-            {/* Upcoming Milestones */}
-            <div className="pt-3 border-t border-slate-100 space-y-2 text-xs">
-              <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Upcoming Milestones</div>
-              {upcomingDeadlines.length > 0 ? (
-                upcomingDeadlines.map((dl, i) => (
-                  <div key={i} className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100 text-slate-700 flex items-center justify-between">
-                    <div className="truncate mr-2">
-                      <div className="font-bold text-purple-900 truncate">{dl.title}</div>
-                      <div className="text-[10px] text-purple-600 truncate">{dl.roadmapTitle || 'Active Track'}</div>
+            {/* Monthly Contribution Grid */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400">
+                <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5 text-center">
+                {/* Pad leading days before the 1st of the month */}
+                {[...Array(firstDayOfWeek)].map((_, i) => (
+                  <div key={`pad-${i}`} className="h-7 rounded-xl" />
+                ))}
+
+                {/* Actual month days */}
+                {[...Array(daysInMonth)].map((_, i) => {
+                  const day = i + 1;
+                  const isToday = day === todayDateNum;
+                  const isCompletedDay = activeDaysSet.has(day);
+
+                  return (
+                    <div
+                      key={day}
+                      className={`h-7 rounded-xl flex items-center justify-center text-xs font-semibold transition-all relative ${
+                        isToday
+                          ? 'bg-amber-500 text-white font-bold shadow-md shadow-amber-500/30 ring-2 ring-amber-400/30'
+                          : isCompletedDay
+                          ? 'bg-emerald-500/15 text-emerald-700 font-bold border border-emerald-400/40'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      title={isToday ? 'Today (Active)' : isCompletedDay ? `Day ${day} - Study Activity Recorded` : `Day ${day}`}
+                    >
+                      {day}
+                      {isCompletedDay && !isToday && (
+                        <span className="w-1 h-1 rounded-full bg-emerald-500 absolute bottom-1" />
+                      )}
                     </div>
-                    <span className="text-xs font-mono font-bold text-purple-700 shrink-0">
-                      {dl.hasQuiz ? `${dl.passingPercentage}% Quiz` : dl.estimatedDuration}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-slate-500 text-center text-xs">
-                  All current milestones completed! 🎉
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Contribution Legend */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+              <span>Activity Legend</span>
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-md bg-slate-100 border border-slate-200 inline-block" />
+                  <span>Rest</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 inline-block" />
+                  <span>Studied</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-md bg-amber-500 inline-block" />
+                  <span>Today</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Contribution Quick Stats */}
+            <div className="grid grid-cols-2 gap-2 pt-1 text-center">
+              <div className="p-2.5 rounded-2xl bg-purple-50/60 border border-purple-100/70">
+                <div className="text-base font-extrabold text-purple-700 font-mono">
+                  {stats.completed || 0}
                 </div>
-              )}
+                <div className="text-[10px] text-slate-500 font-semibold">Mastered Modules</div>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-emerald-50/60 border border-emerald-100/70">
+                <div className="text-base font-extrabold text-emerald-700 font-mono">
+                  {activeDaysSet.size || (stats.completed || 0) + (stats.in_progress || 0)}
+                </div>
+                <div className="text-[10px] text-slate-500 font-semibold">Active Study Days</div>
+              </div>
             </div>
           </div>
 
-          {/* Gamified Leaderboard Card (Image 2) */}
+          {/* Recent Learning Activity Log */}
           <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-500" />
-                Study Warriors Leaderboard
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                Recent Activity Log
               </h3>
-              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                Global
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                Personal Log
               </span>
             </div>
 
             <div className="space-y-2.5 text-xs">
-              {leaderboard.length > 0 ? (
-                leaderboard.map((learner) => (
+              {recentAttempts.length > 0 ? (
+                recentAttempts.map((att, idx) => (
                   <div
-                    key={learner.id || learner.rank}
-                    className={`p-2.5 rounded-2xl flex items-center justify-between transition-all ${
-                      learner.isMe
-                        ? 'bg-amber-50 border border-amber-200 text-slate-800 font-bold shadow-sm'
-                        : 'bg-slate-50/80 text-slate-600'
-                    }`}
+                    key={att._id || idx}
+                    className="p-3 rounded-2xl bg-slate-50/80 border border-slate-100 flex items-center justify-between text-slate-700"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-5 text-center font-bold text-slate-400">{learner.badge}</span>
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-400 to-indigo-500 text-white font-bold flex items-center justify-center text-[10px]">
-                        {learner.name?.charAt(0) || 'L'}
+                    <div className="truncate mr-2">
+                      <div className="font-bold text-slate-800 truncate">{att.quizId?.title || 'Knowledge Assessment'}</div>
+                      <div className="text-[10px] text-slate-400">
+                        {new Date(att.completedAt || att.createdAt).toLocaleDateString()}
                       </div>
-                      <span className="truncate max-w-[120px]">{learner.isMe ? `${learner.name} (You)` : learner.name}</span>
                     </div>
-                    <span className="font-mono font-bold text-amber-600">{learner.points}</span>
+                    <span
+                      className={`font-mono font-bold text-xs px-2 py-0.5 rounded-full ${
+                        att.passed
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      {att.percentage}%
+                    </span>
                   </div>
                 ))
               ) : (
-                <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 font-bold flex items-center justify-between">
-                  <span>{user?.name || 'You'}</span>
-                  <span className="font-mono text-amber-600 font-bold">{dynamicXP} XP</span>
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-center text-slate-500 space-y-1">
+                  <p className="font-semibold text-slate-700">No activity logged yet</p>
+                  <p className="text-[11px] text-slate-400">
+                    Your completed checkpoints, notes, and quiz submissions will appear in this personal study log.
+                  </p>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
     </div>
   );
 }

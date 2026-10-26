@@ -106,6 +106,11 @@ const quizSchema = new mongoose.Schema(
     allowRetake: {
       type: Boolean,
       default: true
+    },
+    timeLimitMinutes: {
+      type: Number,
+      default: 0, // 0 = untimed
+      min: 0
     }
   },
   {

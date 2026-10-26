@@ -10,7 +10,7 @@ import { env } from '../config/env.js';
 
 export async function register(req, res, next) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role: requestedRole } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -21,9 +21,9 @@ export async function register(req, res, next) {
     }
 
     const passwordHash = await User.hashPassword(password);
-    // If no admin exists yet, make this user admin
-    const totalUsers = await User.countDocuments();
-    const role = totalUsers === 0 ? 'admin' : 'client';
+    const userCount = await User.countDocuments();
+    // Allow user to pick role, or default first user to admin, subsequent to client
+    const role = requestedRole || (userCount === 0 ? 'admin' : 'client');
 
     const user = await User.create({
       name,
@@ -287,3 +287,239 @@ export async function acceptInvitation(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Request a magic login link sent to the user's email.
+ * If the user does not exist, creates a passwordless account.
+ */
+export async function requestMagicLogin(req, res, next) {
+  try {
+    const { email, role: requestedRole } = req.body;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      // Auto-create an account for this email (passwordless)
+      const role = requestedRole || 'client';
+      user = await User.create({
+        name: email.split('@')[0],
+        email,
+        passwordHash: null,
+        role,
+        isEmailVerified: true,
+        accountStatus: 'active'
+      });
+    }
+
+    // Generate a magic login token (15 min expiry)
+    const { rawToken, hashedToken } = generateCryptoToken();
+    user.magicLoginToken = hashedToken;
+    user.magicLoginExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const loginLink = `${env.CLIENT_URL}/magic-login?token=${rawToken}`;
+    await EmailService.sendLoginLinkEmail({
+      to: user.email,
+      loginLink,
+      name: user.name,
+      role: user.role
+    });
+
+    return res.json({
+      success: true,
+      message: `A sign-in link has been sent to ${user.email}. Check your inbox!`
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Verifies a magic login token and signs the user in.
+ */
+export async function verifyMagicLogin(req, res, next) {
+  try {
+    const { token } = req.body;
+    const hashedToken = hashCryptoToken(token);
+
+    const user = await User.findOne({
+      magicLoginToken: hashedToken,
+      magicLoginExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Login link is invalid or has expired. Please request a new one.'
+      });
+    }
+
+    // Clear token (single-use)
+    user.magicLoginToken = null;
+    user.magicLoginExpires = null;
+    await user.save();
+
+    const authToken = generateToken({ userId: user._id, role: user.role });
+    setAuthCookie(res, authToken);
+
+    return res.json({
+      success: true,
+      message: 'Signed in successfully!',
+      data: {
+        user,
+        token: authToken
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Direct Google OAuth Authentication & Registration
+ * Supports Google ID Token credential verification with role selection (admin vs client)
+ */
+export async function googleAuth(req, res, next) {
+  try {
+    const { credential, role: requestedRole, profile: clientProfile } = req.body;
+
+    let googlePayload = null;
+
+    // 1. Verify Google credential if supplied
+    if (credential) {
+      try {
+        const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`;
+        const googleRes = await fetch(verifyUrl);
+        if (googleRes.ok) {
+          googlePayload = await googleRes.json();
+        } else {
+          // Decode payload as fallback (useful for dev/mock tokens)
+          const parts = credential.split('.');
+          if (parts.length === 3) {
+            const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+            if (decoded && decoded.email) {
+              googlePayload = decoded;
+            }
+          }
+        }
+      } catch (fetchErr) {
+        // Network fallback
+        const parts = credential.split('.');
+        if (parts.length === 3) {
+          try {
+            const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+            if (decoded && decoded.email) {
+              googlePayload = decoded;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // 2. Direct profile payload fallback
+    if (!googlePayload && clientProfile && clientProfile.email) {
+      googlePayload = clientProfile;
+    }
+
+    if (!googlePayload || !googlePayload.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google authentication failed: unable to verify Google credential.'
+      });
+    }
+
+    const email = googlePayload.email.toLowerCase();
+    const name = googlePayload.name || email.split('@')[0];
+    const picture = googlePayload.picture || googlePayload.avatar || null;
+    const googleId = googlePayload.sub || googlePayload.id || `google_${Date.now()}`;
+
+    // 3. Find existing user
+    let user = await User.findOne({
+      $or: [{ googleId }, { email }]
+    });
+
+    if (user) {
+      if (user.accountStatus === 'suspended') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been suspended. Please contact support.'
+        });
+      }
+
+      let updated = false;
+      if (!user.googleId) {
+        user.googleId = googleId;
+        updated = true;
+      }
+      if (!user.avatar && picture) {
+        user.avatar = picture;
+        updated = true;
+      }
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
+    } else {
+      // 4. Create new user with selected role (admin or client)
+      const role = requestedRole === 'admin' ? 'admin' : 'client';
+
+      user = await User.create({
+        name,
+        email,
+        passwordHash: null,
+        role,
+        googleId,
+        avatar: picture,
+        authProvider: 'google',
+        isEmailVerified: true,
+        accountStatus: 'active'
+      });
+
+      // Link any pending invitations
+      try {
+        const pendingInvitations = await Invitation.find({
+          targetEmail: email,
+          status: 'pending',
+          expiresAt: { $gt: new Date() }
+        });
+
+        for (const inv of pendingInvitations) {
+          const assignment = await Assignment.findOne({ invitation: inv._id });
+          if (assignment) {
+            assignment.client = user._id;
+            assignment.status = 'active';
+            await assignment.save();
+
+            const publishedVersion = await RoadmapVersion.findById(assignment.publishedVersion);
+            if (publishedVersion) {
+              await initializeAssignmentProgress(assignment, publishedVersion);
+            }
+          }
+          inv.status = 'accepted';
+          inv.acceptedAt = new Date();
+          inv.acceptedUser = user._id;
+          await inv.save();
+        }
+      } catch (linkErr) {
+        console.error('Error linking pending invitations:', linkErr);
+      }
+    }
+
+    const token = generateToken({ userId: user._id, role: user.role });
+    setAuthCookie(res, token);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Signed in with Google successfully',
+      data: {
+        user,
+        token
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

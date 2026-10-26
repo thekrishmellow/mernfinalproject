@@ -3,6 +3,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MarkdownViewer } from '../../components/resources/MarkdownViewer.jsx';
 import { QuizModal } from '../../components/quizzes/QuizModal.jsx';
 import { ProgressRing } from '../../components/learner/ProgressRing.jsx';
+import { ByjuVideoPlayer } from '../../components/learner/ByjuVideoPlayer.jsx';
+import { extractYouTubeId } from '../../utils/youtube.js';
 import {
   ArrowLeft,
   CheckSquare,
@@ -20,9 +22,10 @@ import {
   Check,
   Zap,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Video
 } from 'lucide-react';
-import { api } from '../../services/api.js';
+import { api, getAuthDownloadUrl } from '../../services/api.js';
 import { useToast } from '../../components/ui/Toast.jsx';
 import confetti from 'canvas-confetti';
 
@@ -293,7 +296,7 @@ export function ClientNodeWorkspacePage() {
                 <div className="flex items-center gap-2">
                   {activeResource.storageKey && (
                     <a
-                      href={`/api/v1/resources/${activeResource._id}/download`}
+                      href={getAuthDownloadUrl(activeResource._id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3.5 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
@@ -315,8 +318,14 @@ export function ClientNodeWorkspacePage() {
               )}
             </div>
 
-            {/* In-App Reader (Orion Video / Markdown style) */}
-            {activeResource?.type === 'markdown' ? (
+            {/* In-App Reader (BYJU'S In-App Video / Markdown / PDF style) */}
+            {activeResource && (activeResource.type === 'video' || extractYouTubeId(activeResource.externalUrl)) ? (
+              <ByjuVideoPlayer
+                resource={activeResource}
+                isCompleted={(progress?.completedResources || []).includes(activeResource._id)}
+                onToggleComplete={handleToggleResource}
+              />
+            ) : activeResource?.type === 'markdown' ? (
               <div className="max-h-[65vh] overflow-y-auto pr-2 bg-slate-950/95 p-6 rounded-2xl border border-slate-800">
                 <MarkdownViewer content={activeResource.content} />
               </div>
@@ -332,7 +341,7 @@ export function ClientNodeWorkspacePage() {
                   </p>
                 </div>
                 <a
-                  href={`/api/v1/resources/${activeResource._id}/download`}
+                  href={getAuthDownloadUrl(activeResource._id)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-xs shadow-md shadow-orange-500/20"
@@ -446,9 +455,15 @@ export function ClientNodeWorkspacePage() {
                       </span>
                       <div className="truncate">
                         <div className="font-bold truncate">{res.title}</div>
-                        <div className="text-[10px] text-slate-400 uppercase font-mono mt-0.5">
-                          {res.type} &bull; {res.estimatedMinutes} mins
-                        </div>
+                        {res.type === 'video' || extractYouTubeId(res.externalUrl) ? (
+                          <div className="text-[10px] text-red-500 font-bold flex items-center gap-1 font-mono mt-0.5">
+                            <Video className="w-3 h-3 text-red-500" /> Video &bull; {res.estimatedMinutes || 15} mins
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-400 uppercase font-mono mt-0.5">
+                            {res.type} &bull; {res.estimatedMinutes} mins
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -490,9 +505,20 @@ export function ClientNodeWorkspacePage() {
 
               <div className="space-y-1.5 text-xs text-white/95">
                 <div className="font-bold text-base leading-tight">{quiz.title}</div>
-                <p className="text-white/80 text-[11px]">
-                  Pass threshold: <strong>{node?.quizConfig?.passingPercentage || 80}%</strong> &bull; {node?.quizConfig?.questionsPerAttempt || 20} questions
-                </p>
+                <div className="text-white/80 text-[11px] flex items-center gap-2 flex-wrap pt-0.5">
+                  <span>Pass: <strong>{node?.quizConfig?.passingPercentage || quiz.passingPercentage || 80}%</strong></span>
+                  <span>&bull;</span>
+                  <span>{node?.quizConfig?.questionsPerAttempt || quiz.defaultQuestionsPerAttempt || 20} Qs</span>
+                  {(node?.quizConfig?.timeLimitMinutes || quiz.timeLimitMinutes) > 0 && (
+                    <>
+                      <span>&bull;</span>
+                      <span className="inline-flex items-center gap-1 bg-black/25 px-2 py-0.5 rounded-full font-bold text-amber-200">
+                        <Clock className="w-3 h-3 text-amber-300" />
+                        {node?.quizConfig?.timeLimitMinutes || quiz.timeLimitMinutes}m Timer
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
 
               <button

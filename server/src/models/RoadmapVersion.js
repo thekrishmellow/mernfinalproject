@@ -42,7 +42,8 @@ const roadmapVersionSchema = new mongoose.Schema(
             isRequired: { type: Boolean, default: false },
             passingPercentage: { type: Number, default: 80 },
             questionsPerAttempt: { type: Number, default: 20 },
-            maxAttempts: { type: Number, default: 0 }
+            maxAttempts: { type: Number, default: 0 },
+            timeLimitMinutes: { type: Number, default: 0 } // 0 = untimed or inherit
           },
           completionConditions: {
             requireAllResources: { type: Boolean, default: false },

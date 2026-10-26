@@ -69,6 +69,18 @@ const quizAttemptSchema = new mongoose.Schema(
       type: Number,
       default: 80
     },
+    timeLimitMinutes: {
+      type: Number,
+      default: 0
+    },
+    startedAt: {
+      type: Date,
+      default: Date.now
+    },
+    timeSpentSeconds: {
+      type: Number,
+      default: 0
+    },
     // Detailed feedback stored only after submission & grading:
     gradedDetails: [
       {

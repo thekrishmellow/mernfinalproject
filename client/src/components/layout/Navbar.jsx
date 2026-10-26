@@ -15,19 +15,24 @@ export function Navbar() {
   };
 
   return (
-    <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between">
+    <header className="h-16 border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between shadow-xs">
       <div className="flex items-center gap-3">
-        <Link to={isAdmin ? "/admin/dashboard" : "/client/dashboard"} className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
-            <Compass className="w-5 h-5" />
+        <Link to={isAdmin ? "/admin/dashboard" : "/client/dashboard"} className="flex items-center gap-3 group">
+          <div className="size-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-700 flex items-center justify-center text-white shadow-md shadow-purple-600/25 group-hover:scale-105 transition-transform">
+            <Compass className="size-5 stroke-[2.2]" aria-hidden="true" />
           </div>
           <div>
-            <span className="font-bold text-lg text-white tracking-tight">Pathfinder</span>
-            <span className="hidden sm:inline-block text-[11px] text-slate-400 ml-2 font-mono">Roadmap Core</span>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-lg text-slate-850 tracking-tight text-balance">Pathfinder</span>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-purple-50 text-[10px] text-purple-700 font-extrabold tracking-wide uppercase border border-purple-100">
+                Studio
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 block -mt-0.5 font-medium">Personalized Learning Roadmap Platform</span>
           </div>
         </Link>
-        <Badge variant={isAdmin ? 'purple' : 'primary'} className="ml-2">
-          {isAdmin ? 'Admin Studio' : 'Learner Dashboard'}
+        <Badge variant={isAdmin ? 'purple' : 'primary'} className="ml-2 font-bold hidden md:inline-flex">
+          {isAdmin ? 'Admin Console' : 'Learner Dashboard'}
         </Badge>
       </div>
 
@@ -35,13 +40,27 @@ export function Navbar() {
         {user ? (
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col text-right">
-              <span className="text-sm font-medium text-slate-200">{user.name}</span>
-              <span className="text-xs text-slate-400 font-mono">{user.email}</span>
+              <span className="text-sm font-bold text-slate-800">{user.name}</span>
+              <span className="text-[11px] text-slate-400 font-medium">{user.email}</span>
             </div>
-            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
-              {isAdmin ? <ShieldCheck className="w-4 h-4 text-purple-400" /> : <User className="w-4 h-4 text-blue-400" />}
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} icon={LogOut}>
+            {user.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="size-9 rounded-2xl object-cover border-2 border-white shadow-md shadow-purple-500/20"
+              />
+            ) : (
+              <div className="size-9 rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 border-2 border-white shadow-md shadow-purple-500/20 flex items-center justify-center text-white font-bold text-xs">
+                {user.name ? user.name[0].toUpperCase() : 'A'}
+              </div>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleLogout}
+              icon={LogOut}
+              aria-label="Logout"
+            >
               <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>

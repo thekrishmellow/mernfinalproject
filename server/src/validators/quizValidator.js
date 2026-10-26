@@ -25,6 +25,7 @@ export const createQuizSchema = {
     passingPercentage: z.number().min(1).max(100).default(80),
     defaultQuestionsPerAttempt: z.number().min(1).default(20),
     maxAttempts: z.number().min(0).default(0),
+    timeLimitMinutes: z.number().min(0).default(0).optional(),
     randomizeQuestions: z.boolean().default(true),
     randomizeOptions: z.boolean().default(true),
     showExplanationsAfterSubmission: z.boolean().default(true),

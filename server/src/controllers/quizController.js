@@ -13,7 +13,8 @@ export async function createQuiz(req, res, next) {
       randomizeQuestions,
       randomizeOptions,
       showExplanationsAfterSubmission,
-      allowRetake
+      allowRetake,
+      timeLimitMinutes
     } = req.body;
 
     const quiz = await Quiz.create({
@@ -24,6 +25,7 @@ export async function createQuiz(req, res, next) {
       passingPercentage: passingPercentage || 80,
       defaultQuestionsPerAttempt: defaultQuestionsPerAttempt || 20,
       maxAttempts: maxAttempts || 0,
+      timeLimitMinutes: timeLimitMinutes ? parseInt(timeLimitMinutes, 10) : 0,
       randomizeQuestions: randomizeQuestions !== undefined ? randomizeQuestions : true,
       randomizeOptions: randomizeOptions !== undefined ? randomizeOptions : true,
       showExplanationsAfterSubmission: showExplanationsAfterSubmission !== undefined ? showExplanationsAfterSubmission : true,
@@ -43,7 +45,10 @@ export async function createQuiz(req, res, next) {
 export async function getQuizzes(req, res, next) {
   try {
     const { search, page = 1, limit = 50 } = req.query;
-    const query = {};
+    // Strict isolation: only show quizzes created by this admin
+    const query = {
+      owner: req.user._id
+    };
 
     if (search) {
       query.$or = [
@@ -87,6 +92,13 @@ export async function getQuizById(req, res, next) {
       });
     }
 
+    if (req.user.role === 'admin' && !quiz.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not own this quiz.'
+      });
+    }
+
     return res.json({
       success: true,
       data: { quiz }
@@ -108,6 +120,13 @@ export async function updateQuiz(req, res, next) {
       });
     }
 
+    if (!quiz.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to edit this quiz.'
+      });
+    }
+
     const fields = [
       'title',
       'description',
@@ -119,6 +138,7 @@ export async function updateQuiz(req, res, next) {
       'randomizeOptions',
       'showExplanationsAfterSubmission',
       'allowRetake',
+      'timeLimitMinutes',
       'status'
     ];
 
@@ -143,6 +163,22 @@ export async function updateQuiz(req, res, next) {
 export async function deleteQuiz(req, res, next) {
   try {
     const { quizId } = req.params;
+    const quiz = await Quiz.findById(quizId);
+
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: 'Quiz not found.'
+      });
+    }
+
+    if (!quiz.owner.equals(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to delete this quiz.'
+      });
+    }
+
     await Quiz.findByIdAndDelete(quizId);
 
     return res.json({
@@ -153,6 +189,7 @@ export async function deleteQuiz(req, res, next) {
     next(error);
   }
 }
+
 
 /**
  * Validates and imports structured question bank from JSON or CSV rows
@@ -252,11 +289,19 @@ export async function extractFromDocument(req, res, next) {
       });
     }
 
-    const rawText = await DocumentExtractionService.extractTextFromBuffer(
-      req.file.buffer,
-      req.file.mimetype,
-      req.file.originalname
-    );
+    let rawText;
+    try {
+      rawText = await DocumentExtractionService.extractTextFromBuffer(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+    } catch (extractionErr) {
+      return res.status(422).json({
+        success: false,
+        message: `Could not extract text from "${req.file.originalname}": ${extractionErr.message}. Try uploading a text-based PDF, Markdown (.md), or plain text (.txt) file instead.`
+      });
+    }
 
     const extractedQuestions = DocumentExtractionService.parseQuestionsFromText(rawText);
 

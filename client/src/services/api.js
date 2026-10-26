@@ -1,11 +1,22 @@
 import axios from 'axios';
 
+const baseURL = import.meta.env.VITE_API_URL || '/api/v1';
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
+});
+
+// Request interceptor to attach token from localStorage for seamless cross-domain auth (Vercel)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('pathfinder_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // Response interceptor for consistent error extraction
@@ -25,3 +36,13 @@ api.interceptors.response.use(
     return Promise.reject(customError);
   }
 );
+
+/**
+ * Builds an authenticated download URL that works in new browser tabs
+ * by appending the JWT token as a query parameter.
+ */
+export function getAuthDownloadUrl(resourceId) {
+  const token = localStorage.getItem('pathfinder_token');
+  const base = import.meta.env.VITE_API_URL || '/api/v1';
+  return `${base}/resources/${resourceId}/download${token ? `?token=${token}` : ''}`;
+}

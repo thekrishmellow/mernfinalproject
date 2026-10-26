@@ -16,12 +16,34 @@ import { prepareLearnerQuestions, gradeQuizAttempt } from '../services/quizzes/q
 
 export async function getClientDashboard(req, res, next) {
   try {
+    const userEmail = req.user.email.toLowerCase().trim();
+
+    // 1. Auto-claim any assignments or invitations targeting this user's email
+    const unclaimed = await Assignment.find({
+      targetEmail: userEmail,
+      $or: [
+        { client: null },
+        { client: { $exists: false } },
+        { client: { $ne: req.user._id } }
+      ]
+    });
+
+    for (const asgn of unclaimed) {
+      asgn.client = req.user._id;
+      await asgn.save();
+    }
+
+    // 2. Fetch all assignments strictly assigned to this client or their email
     let assignments = await Assignment.find({
-      client: req.user._id,
-      status: { $in: ['active', 'completed'] }
+      $or: [
+        { client: req.user._id },
+        { targetEmail: userEmail }
+      ],
+      status: { $in: ['active', 'completed', 'pending_acceptance'] }
     })
-      .populate('roadmap', 'title description category estimatedDuration accentColor currentPublishedVersion')
+      .populate('roadmap', 'title description category estimatedDuration accentColor currentPublishedVersion owner')
       .populate('publishedVersion', 'versionNumber nodes edges')
+      .populate('assignedBy', 'name email')
       .sort({ updatedAt: -1 });
 
     // Check if any assignment is on an older version than currentPublishedVersion and auto-sync!
@@ -60,66 +82,30 @@ export async function getClientDashboard(req, res, next) {
     }
 
     // Dynamic XP & Streak calculations
-    const passedQuizCount = await NodeProgress.countDocuments({
-      assignment: { $in: assignmentIds },
-      passedQuiz: true
+    // Activity timestamps for calendar contribution mapping (isolated strictly to req.user)
+    const quizDates = await QuizAttempt.find({ clientId: req.user._id })
+      .select('createdAt completedAt')
+      .lean();
+
+    const progressDates = await NodeProgress.find({ assignment: { $in: assignmentIds } })
+      .select('lastActivityAt completedAt createdAt')
+      .lean();
+
+    const activityTimestamps = [];
+    quizDates.forEach((q) => {
+      if (q.completedAt) activityTimestamps.push(q.completedAt);
+      else if (q.createdAt) activityTimestamps.push(q.createdAt);
     });
-    const completedNodeCount = statsMap.completed || 0;
-    const dynamicXP = (completedNodeCount * 100) + (passedQuizCount * 50);
+    progressDates.forEach((p) => {
+      if (p.completedAt) activityTimestamps.push(p.completedAt);
+      if (p.lastActivityAt) activityTimestamps.push(p.lastActivityAt);
+    });
 
-    const latestActive = await NodeProgress.findOne({ assignment: { $in: assignmentIds } }).sort({ lastActivityAt: -1 });
-    const streakDays = Math.max(1, Math.min(30, completedNodeCount > 0 ? 3 + completedNodeCount : 1));
-
-    // Dynamic Real Leaderboard
-    const allClients = await User.find({ role: 'client' }).select('name email').limit(10);
-    const leaderboardRaw = await Promise.all(
-      allClients.map(async (c) => {
-        const cAssignments = await Assignment.find({ client: c._id }).select('_id');
-        const cAsgnIds = cAssignments.map((a) => a._id);
-        const cCompleted = await NodeProgress.countDocuments({ assignment: { $in: cAsgnIds }, status: 'completed' });
-        const cQuizzes = await NodeProgress.countDocuments({ assignment: { $in: cAsgnIds }, passedQuiz: true });
-        const pts = (cCompleted * 100) + (cQuizzes * 50) + 120;
-        return {
-          id: c._id,
-          name: c.name,
-          email: c.email,
-          rawPoints: pts,
-          points: `${pts} XP`,
-          isMe: c._id.toString() === req.user._id.toString()
-        };
-      })
+    const activityDates = Array.from(
+      new Set(activityTimestamps.map((d) => new Date(d).toISOString().slice(0, 10)))
     );
-    leaderboardRaw.sort((a, b) => b.rawPoints - a.rawPoints);
-    const leaderboard = leaderboardRaw.map((item, index) => ({
-      ...item,
-      rank: index + 1,
-      badge: index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`
-    }));
 
-    // Dynamic Upcoming Deadlines / Next Actions from actual roadmap nodes
-    const upcomingDeadlines = [];
-    for (const asgn of assignments) {
-      if (asgn.publishedVersion?.nodes) {
-        const nodeProgresses = await NodeProgress.find({ assignment: asgn._id });
-        const progMap = new Map(nodeProgresses.map((p) => [p.nodeId, p]));
-        for (const n of asgn.publishedVersion.nodes) {
-          const p = progMap.get(n.id);
-          if (p?.status === 'in_progress' || p?.status === 'available') {
-            upcomingDeadlines.push({
-              title: n.title,
-              roadmapTitle: asgn.roadmap?.title,
-              estimatedDuration: n.estimatedDuration || '1 week',
-              hasQuiz: n.quizConfig?.isRequired || false,
-              passingPercentage: n.quizConfig?.passingPercentage || 80
-            });
-            if (upcomingDeadlines.length >= 3) break;
-          }
-        }
-      }
-      if (upcomingDeadlines.length >= 3) break;
-    }
-
-    // Recent quiz attempts
+    // Recent quiz attempts for personal log
     const recentAttempts = await QuizAttempt.find({
       clientId: req.user._id
     })
@@ -133,10 +119,7 @@ export async function getClientDashboard(req, res, next) {
       data: {
         assignments,
         stats: statsMap,
-        dynamicXP,
-        streakDays,
-        leaderboard,
-        upcomingDeadlines,
+        activityDates,
         recentAttempts
       }
     });
@@ -200,7 +183,8 @@ export async function getAssignedRoadmap(req, res, next) {
         completedAt: pr?.completedAt || null,
         quizConfig: {
           isRequired: node.quizConfig?.isRequired || false,
-          passingPercentage: node.quizConfig?.passingPercentage || 80
+          passingPercentage: node.quizConfig?.passingPercentage || 80,
+          timeLimitMinutes: node.quizConfig?.timeLimitMinutes !== undefined ? node.quizConfig.timeLimitMinutes : 0
         }
       };
     });
@@ -273,7 +257,7 @@ export async function getNodeWorkspace(req, res, next) {
     let quiz = null;
     if (nodeConfig.quizConfig?.quizId) {
       quiz = await Quiz.findById(nodeConfig.quizConfig.quizId).select(
-        'title description passingPercentage defaultQuestionsPerAttempt maxAttempts allowRetake'
+        'title description passingPercentage defaultQuestionsPerAttempt maxAttempts allowRetake timeLimitMinutes'
       );
     }
 
@@ -436,6 +420,13 @@ export async function startQuizAttempt(req, res, next) {
     const questionCount = nodeConfig.quizConfig.questionsPerAttempt || quiz.defaultQuestionsPerAttempt || 20;
     const learnerQuestions = prepareLearnerQuestions(quiz, questionCount);
 
+    const timeLimitMinutes =
+      nodeConfig.quizConfig?.timeLimitMinutes !== undefined &&
+      nodeConfig.quizConfig?.timeLimitMinutes !== null &&
+      Number(nodeConfig.quizConfig.timeLimitMinutes) > 0
+        ? Number(nodeConfig.quizConfig.timeLimitMinutes)
+        : (quiz.timeLimitMinutes || 0);
+
     const attempt = await QuizAttempt.create({
       assignment: assignment._id,
       nodeId,
@@ -443,7 +434,9 @@ export async function startQuizAttempt(req, res, next) {
       clientId: req.user._id,
       attemptNumber: existingAttempts + 1,
       questionSnapshots: learnerQuestions,
-      passingPercentage: nodeConfig.quizConfig.passingPercentage || quiz.passingPercentage || 80
+      passingPercentage: nodeConfig.quizConfig.passingPercentage || quiz.passingPercentage || 80,
+      timeLimitMinutes,
+      startedAt: new Date()
     });
 
     return res.status(201).json({
@@ -453,6 +446,8 @@ export async function startQuizAttempt(req, res, next) {
         attemptId: attempt._id,
         attemptNumber: attempt.attemptNumber,
         passingPercentage: attempt.passingPercentage,
+        timeLimitMinutes: attempt.timeLimitMinutes || 0,
+        startedAt: attempt.startedAt || attempt.createdAt,
         questions: learnerQuestions
       }
     });
@@ -506,6 +501,8 @@ export async function submitQuizAttempt(req, res, next) {
     attempt.passed = grading.passed;
     attempt.gradedDetails = grading.gradedDetails;
     attempt.completedAt = new Date();
+    const startTime = attempt.startedAt ? new Date(attempt.startedAt).getTime() : new Date(attempt.createdAt).getTime();
+    attempt.timeSpentSeconds = Math.max(0, Math.round((Date.now() - startTime) / 1000));
     await attempt.save();
 
     // Update node progress record
@@ -544,3 +541,46 @@ export async function submitQuizAttempt(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Accepts an assigned roadmap, activates it, and creates learning progression nodes
+ */
+export async function acceptAssignedRoadmap(req, res, next) {
+  try {
+    const { assignmentId } = req.params;
+    const userEmail = req.user.email.toLowerCase().trim();
+
+    const assignment = await Assignment.findOne({
+      _id: assignmentId,
+      $or: [
+        { client: req.user._id },
+        { targetEmail: userEmail }
+      ]
+    }).populate('roadmap').populate('publishedVersion');
+
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assignment not found for your account.'
+      });
+    }
+
+    assignment.client = req.user._id;
+    assignment.status = 'active';
+    await assignment.save();
+
+    if (assignment.publishedVersion) {
+      const { initializeAssignmentProgress } = await import('../services/progression/progressionService.js');
+      await initializeAssignmentProgress(assignment, assignment.publishedVersion);
+    }
+
+    return res.json({
+      success: true,
+      message: `Enrolled successfully! Welcome to "${assignment.roadmap?.title}".`,
+      data: { assignment }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

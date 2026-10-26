@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from '../ui/Modal.jsx';
 import { Button } from '../ui/Button.jsx';
 import { Badge } from '../ui/Badge.jsx';
@@ -10,7 +10,9 @@ import {
   Award,
   ChevronRight,
   ChevronLeft,
-  RotateCcw
+  RotateCcw,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -27,6 +29,51 @@ export function QuizModal({
   const [selectedAnswers, setSelectedAnswers] = useState({}); // { questionId: [optionId, ...] }
   const [result, setResult] = useState(null);
 
+  // Timer states
+  const timeLimitMinutes = attemptData?.timeLimitMinutes || 0;
+  const isTimed = timeLimitMinutes > 0;
+  const totalLimitSeconds = timeLimitMinutes * 60;
+
+  const [secondsRemaining, setSecondsRemaining] = useState(totalLimitSeconds);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  const autoSubmittedRef = useRef(false);
+
+  // Initialize and tick timer
+  useEffect(() => {
+    if (!isOpen || !attemptData || result) return;
+
+    autoSubmittedRef.current = false;
+    setHasTimedOut(false);
+
+    const startTime = attemptData.startedAt
+      ? new Date(attemptData.startedAt).getTime()
+      : Date.now();
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diffSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
+
+      if (isTimed) {
+        const remaining = Math.max(0, totalLimitSeconds - diffSeconds);
+        setSecondsRemaining(remaining);
+
+        if (remaining <= 0 && !autoSubmittedRef.current) {
+          autoSubmittedRef.current = true;
+          setHasTimedOut(true);
+          // Auto submit
+          handleAutoSubmit();
+        }
+      } else {
+        setElapsedSeconds(diffSeconds);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, attemptData, result, isTimed, totalLimitSeconds]);
+
   if (!isOpen || !attemptData) return null;
 
   const questions = attemptData.questions || [];
@@ -34,6 +81,7 @@ export function QuizModal({
   const currentQ = questions[currentQuestionIndex];
 
   const handleSelectOption = (questionId, optionId, isMultiple = false) => {
+    if (hasTimedOut || result) return;
     setSelectedAnswers((prev) => {
       const current = prev[questionId] || [];
       if (isMultiple) {
@@ -72,12 +120,46 @@ export function QuizModal({
     setResult(res);
   };
 
+  const handleAutoSubmit = async () => {
+    const formattedAnswers = Object.entries(selectedAnswers).map(([questionId, selectedOptions]) => ({
+      questionId,
+      selectedOptions
+    }));
+
+    try {
+      const res = await onSubmitAttempt(formattedAnswers);
+      if (res?.passed) {
+        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      }
+      setResult(res);
+    } catch (err) {
+      // handled in parent
+    }
+  };
+
   const handleResetForRetake = () => {
     setResult(null);
     setSelectedAnswers({});
     setCurrentQuestionIndex(0);
+    setHasTimedOut(false);
+    autoSubmittedRef.current = false;
     if (onRetake) onRetake();
   };
+
+  // Format MM:SS helper
+  const formatTime = (totalSec) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Remaining percentage for progress bar
+  const timePercent = isTimed && totalLimitSeconds > 0
+    ? Math.max(0, Math.min(100, (secondsRemaining / totalLimitSeconds) * 100))
+    : 100;
+
+  const isCriticalTime = isTimed && secondsRemaining <= 60;
+  const isWarningTime = isTimed && secondsRemaining <= totalLimitSeconds * 0.25;
 
   return (
     <Modal
@@ -88,17 +170,67 @@ export function QuizModal({
     >
       {!result ? (
         <div className="space-y-6">
-          {/* Progress Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <Badge variant="primary">Attempt #{attemptData.attemptNumber}</Badge>
-              <span className="text-xs text-slate-400">
-                Passing Score: {attemptData.passingPercentage}%
-              </span>
+          {/* Enhanced Progress & Live Timer Header */}
+          <div className="space-y-3 border-b border-slate-800 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="primary">Attempt #{attemptData.attemptNumber}</Badge>
+                <span className="text-xs text-slate-400">
+                  Passing Score: <strong>{attemptData.passingPercentage}%</strong>
+                </span>
+              </div>
+
+              {/* Live Countdown Clock / Stopwatch */}
+              <div className="flex items-center gap-3">
+                {isTimed ? (
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-mono text-xs font-bold transition-all ${
+                      isCriticalTime
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/50 animate-pulse'
+                        : isWarningTime
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    <Clock className={`w-3.5 h-3.5 ${isCriticalTime ? 'animate-spin' : ''}`} />
+                    <span>Time Left: {formatTime(secondsRemaining)}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300 font-mono text-xs">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Elapsed: {formatTime(elapsedSeconds)}</span>
+                  </div>
+                )}
+
+                <div className="text-xs text-slate-300 font-mono">
+                  Answered {answeredCount}/{totalQuestions}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-slate-300 font-mono">
-              Answered {answeredCount} of {totalQuestions}
-            </div>
+
+            {/* Linear Countdown Progress Bar */}
+            {isTimed && (
+              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-1000 ${
+                    isCriticalTime
+                      ? 'bg-red-500'
+                      : isWarningTime
+                      ? 'bg-amber-400'
+                      : 'bg-gradient-to-r from-emerald-400 to-teal-400'
+                  }`}
+                  style={{ width: `${timePercent}%` }}
+                />
+              </div>
+            )}
+
+            {/* Urgent Timeout Banner */}
+            {isCriticalTime && secondsRemaining > 0 && (
+              <div className="px-3.5 py-1.5 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-[11px] font-bold flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 animate-bounce" />
+                <span>Less than 1 minute remaining! Any unsaved choices will be auto-submitted.</span>
+              </div>
+            )}
           </div>
 
           {/* Question Body */}

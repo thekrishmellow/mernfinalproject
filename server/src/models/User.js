@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: [true, 'Password is required']
+      default: null
     },
     role: {
       type: String,
@@ -43,6 +43,29 @@ const userSchema = new mongoose.Schema(
     passwordResetExpires: {
       type: Date,
       default: null
+    },
+    magicLoginToken: {
+      type: String,
+      default: null
+    },
+    magicLoginExpires: {
+      type: Date,
+      default: null
+    },
+    googleId: {
+      type: String,
+      default: null,
+      sparse: true,
+      index: true
+    },
+    avatar: {
+      type: String,
+      default: null
+    },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google', 'magic'],
+      default: 'local'
     }
   },
   {
@@ -52,6 +75,8 @@ const userSchema = new mongoose.Schema(
         delete ret.passwordHash;
         delete ret.passwordResetToken;
         delete ret.passwordResetExpires;
+        delete ret.magicLoginToken;
+        delete ret.magicLoginExpires;
         delete ret.__v;
         return ret;
       }
@@ -60,6 +85,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.passwordHash) return false;
   return bcrypt.compare(candidatePassword, this.passwordHash);
 };
 

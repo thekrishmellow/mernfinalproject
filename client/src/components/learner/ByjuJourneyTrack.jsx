@@ -21,99 +21,104 @@ export function ByjuStepperTrack({ nodes = [], onSelectNode, onResume }) {
   const activeIndex = nodes.findIndex((n) => n.status === 'available' || n.status === 'in_progress');
   const activeNode = activeIndex >= 0 ? nodes[activeIndex] : nodes[0];
 
-  return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-500">Practice Journey</span>
-          <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight">Learning Milestones</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Practice makes perfect. Complete each lap to unlock advanced assessments!
-          </p>
+    // Calculate clamped progress percentage between nodes (never exceed 100%)
+    const completedCount = nodes.filter((n) => n.status === 'completed').length;
+    const progressPercent =
+      nodes.length > 1
+        ? Math.min(100, Math.max(0, (completedCount / (nodes.length - 1)) * 100))
+        : 0;
+
+    return (
+      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 space-y-6 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-500">Practice Journey</span>
+            <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight">Learning Milestones</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Practice makes perfect. Complete each lap to unlock advanced assessments!
+            </p>
+          </div>
+
+          {activeNode && (
+            <button
+              onClick={() => onResume && onResume(activeNode.id)}
+              className="self-start sm:self-auto px-6 py-3 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-sm shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2"
+            >
+              <Play className="w-4 h-4 fill-white" />
+              Resume Practice
+            </button>
+          )}
         </div>
 
-        {activeNode && (
-          <button
-            onClick={() => onResume && onResume(activeNode.id)}
-            className="self-start sm:self-auto px-6 py-3 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-sm shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2"
-          >
-            <Play className="w-4 h-4 fill-white" />
-            Resume Practice
-          </button>
-        )}
-      </div>
+        {/* Stepper Track */}
+        <div className="relative pt-4 pb-2">
+          <div className="flex items-center justify-between relative z-10 overflow-x-auto pb-4 gap-4 sm:gap-6">
+            {nodes.map((node, index) => {
+              const isCompleted = node.status === 'completed';
+              const isActive = node.status === 'available' || node.status === 'in_progress';
+              const isLocked = node.status === 'locked';
+              const stepLabel = STEP_LABELS[index % STEP_LABELS.length];
 
-      {/* Stepper Track */}
-      <div className="relative pt-4 pb-2">
-        <div className="flex items-center justify-between relative z-10 overflow-x-auto pb-4 gap-4 sm:gap-6">
-          {nodes.map((node, index) => {
-            const isCompleted = node.status === 'completed';
-            const isActive = node.status === 'available' || node.status === 'in_progress';
-            const isLocked = node.status === 'locked';
-            const stepLabel = STEP_LABELS[index % STEP_LABELS.length];
-
-            return (
-              <div
-                key={node.id}
-                onClick={() => onSelectNode && onSelectNode(node)}
-                className="flex flex-col items-center min-w-[76px] cursor-pointer group"
-              >
-                {/* Node Icon Circle */}
+              return (
                 <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative ${
-                    isCompleted
-                      ? 'border-2 border-amber-500 bg-amber-50 text-amber-600 shadow-md shadow-amber-500/10'
-                      : isActive
-                      ? 'border-3 border-orange-500 bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-xl shadow-orange-500/30 scale-110 ring-4 ring-orange-100'
-                      : 'border-2 border-slate-200 bg-slate-50 text-slate-400'
-                  }`}
+                  key={node.id}
+                  onClick={() => onSelectNode && onSelectNode(node)}
+                  className="flex flex-col items-center min-w-[76px] cursor-pointer group"
                 >
-                  {isCompleted ? (
-                    <div className="relative">
-                      <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      </span>
-                    </div>
-                  ) : isActive ? (
-                    <Zap className="w-6 h-6 fill-white text-white animate-pulse" />
-                  ) : (
-                    <Lock className="w-5 h-5 text-slate-400" />
-                  )}
+                  {/* Node Icon Circle */}
+                  <div
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative ${
+                      isCompleted
+                        ? 'border-2 border-amber-500 bg-amber-50 text-amber-600 shadow-md shadow-amber-500/10'
+                        : isActive
+                        ? 'border-3 border-orange-500 bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-xl shadow-orange-500/30 scale-110 ring-4 ring-orange-100'
+                        : 'border-2 border-slate-200 bg-slate-50 text-slate-400'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <div className="relative">
+                        <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </span>
+                      </div>
+                    ) : isActive ? (
+                      <Zap className="w-6 h-6 fill-white text-white animate-pulse" />
+                    ) : (
+                      <Lock className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+
+                  {/* Milestone label */}
+                  <span
+                    className={`text-xs mt-2.5 font-bold tracking-tight text-center ${
+                      isActive ? 'text-orange-600 font-extrabold' : isCompleted ? 'text-slate-700' : 'text-slate-400'
+                    }`}
+                  >
+                    {stepLabel}
+                  </span>
+
+                  <span className="text-[10px] text-slate-400 text-center line-clamp-1 max-w-[80px] mt-0.5">
+                    {node.title}
+                  </span>
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Milestone label */}
-                <span
-                  className={`text-xs mt-2.5 font-bold tracking-tight text-center ${
-                    isActive ? 'text-orange-600 font-extrabold' : isCompleted ? 'text-slate-700' : 'text-slate-400'
-                  }`}
-                >
-                  {stepLabel}
-                </span>
-
-                <span className="text-[10px] text-slate-400 text-center line-clamp-1 max-w-[80px] mt-0.5">
-                  {node.title}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Connecting track line */}
-        <div className="absolute top-11 left-8 right-8 h-1 bg-slate-100 z-0 hidden sm:block">
-          <div
-            className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-700"
-            style={{
-              width: `${
-                nodes.length > 1
-                  ? (nodes.filter((n) => n.status === 'completed').length / (nodes.length - 1)) * 100
-                  : 0
-              }%`
-            }}
-          />
+          {/* Connecting track line */}
+          {nodes.length > 1 && (
+            <div className="absolute top-11 left-8 right-8 h-1.5 bg-slate-100 rounded-full overflow-hidden z-0 hidden sm:block">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-700"
+                style={{
+                  width: `${progressPercent}%`
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  );
+    );
 }
 
 export function ByjuWindingTrail({ nodes = [], onSelectNode, onResume }) {
