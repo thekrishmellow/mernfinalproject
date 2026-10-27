@@ -24,9 +24,9 @@
 
 ## 3. Project Overview
 
-Pathfinder is a full-stack MERN application built to solve the rigidity and fragmentation of modern education platforms. Rather than forcing every student down an identical, static syllabus, Pathfinder enables instructors, mentors, and educational teams to design customized, visual learning roadmaps and assign them to specific learners.
+Pathfinder is a full-stack MERN application built to solve the rigidity and fragmentation of modern learning management systems. Rather than forcing every student down an identical, static syllabus, Pathfinder enables instructors, mentors, parents, and educational organizations to design customized, visual learning roadmaps and assign them to specific learners.
 
-The platform combines an interactive drag-and-drop node canvas (inspired by `roadmap.sh`), a gamified step-by-step milestone trail (inspired by BYJU'S), an assessment engine with automated question extraction, and a server-authoritative progression engine.
+The platform combines an interactive drag-and-drop node canvas (inspired by `roadmap.sh`), a gamified step-by-step milestone trail (inspired by BYJU'S), an assessment engine with automated PDF question extraction, and a server-authoritative progression engine.
 
 ### Core Philosophy
 > *"Every learner should receive a deliberately designed learning journey, and every educator should have a clear view of how that journey is progressing."*
@@ -52,8 +52,9 @@ Pathfinder addresses these challenges through a unified, prerequisite-driven arc
 
 - **Visual Directed Acyclic Graph (DAG) Roadmaps**: Curricula are modeled as directed graphs where nodes represent distinct topics, exercises, or milestone assessments, and edges represent strict prerequisite relationships.
 - **Server-Authoritative Progression Invariants**: Downstream nodes remain locked with explicit prerequisite explanations until the backend verifies that all preceding requirements (checklists, resource attestation, and passing quiz thresholds) have been satisfied.
-- **Immutable Version Snapshots**: Publishing a roadmap creates an immutable `RoadmapVersion`. Assigned learners are bound to their snapshot, guaranteeing that future instructor drafts never disrupt active students.
+- **Immutable Version Snapshots**: Publishing a roadmap creates an immutable `RoadmapVersion`. When roadmaps are republished, the progression engine intelligently synchronizes active student assignments while preserving previously completed work.
 - **Centralized Multimedia Workspaces**: Each node encapsulates embedded YouTube videos, GitHub-Flavored Markdown notes, authenticated PDF file previews, and timed quizzes within a distraction-free student workspace.
+- **Passwordless & Invitation-Based Access**: Flexible authentication supports passwordless magic links, single-use cohort invitation tokens, Google OAuth 2.0, and standard email/password authentication.
 - **Real-Time Instructor Analytics**: Instructors monitor active assignments, cohort pass percentages, average scores, and recent student activity from an integrated control center.
 
 ---
@@ -71,19 +72,19 @@ Pathfinder addresses these challenges through a unified, prerequisite-driven arc
   - `quiz`: Gated assessments requiring a minimum passing percentage.
   - `project`: Capstone builds and implementation milestones.
   - `completion`: Curriculum graduation flag.
-- **Graph & Cycle Validation**: Backend validation engine (`graphValidationService.js`) enforces DAG integrity using Depth-First Search (DFS) topological sorting to reject circular dependencies, self-loops, and dangling edges.
-- **Roadmap Duplication & Drafts**: Instructors can duplicate roadmaps, work in draft mode, and publish version snapshots.
+- **Graph & Cycle Validation**: Backend validation engine ([graphValidationService.js](file:///Users/krishnabhatia/mernfinalproject/server/src/services/roadmap/graphValidationService.js)) enforces DAG integrity using Depth-First Search (DFS) topological sorting to reject circular dependencies, self-loops, and dangling edges.
+- **Roadmap Duplication & Drafts**: Instructors can duplicate existing roadmaps, modify draft canvases independently, and publish version snapshots.
 
 #### Assessment Engine & Question Bank
-- **Question Types**: Single-choice (radio), True/False, and Multiple-choice (multi-select).
-- **Automated Document Extraction**: Upload PDF, Markdown, or Plaintext study notes. The backend (`documentExtractionService.js`) parses questions, options, and candidate answer keys for instructor review before insertion.
-- **Structured CSV / JSON Import**: Fast bulk question import with downloadable templates and row-level validation.
-- **Server-Side Grading & Answer Protection**: Answer keys and explanations are stripped from client payloads before quiz attempts are served. Grading and threshold verification happen exclusively on the backend (`quizGradingService.js`).
-- **Timed Attempts**: Configurable quiz timers with automatic submission on expiration.
+- **Question Types**: Single-choice (radio), True/False, and Multiple-choice (multi-select with full-set matching).
+- **Automated PDF & Text Extraction**: Upload PDF or text/markdown study notes. The backend ([documentExtractionService.js](file:///Users/krishnabhatia/mernfinalproject/server/src/services/extraction/documentExtractionService.js)) parses candidate prompts, choices, and detected answer keys using `pdf-parse` for educator review before insertion.
+- **Structured CSV / JSON Import**: Bulk question import with downloadable templates and row-level validation.
+- **Server-Side Grading & Answer Protection**: Answer keys and explanations are stripped from client payloads before quiz attempts are served. Grading and threshold verification happen exclusively on the backend ([quizGradingService.js](file:///Users/krishnabhatia/mernfinalproject/server/src/services/quizzes/quizGradingService.js)).
+- **Timed Attempts & Randomization**: Configurable quiz timers with automatic expiration, question shuffling, and option shuffling.
 
 #### Learner Experience & Gamified Milestones
 - **Dual Visual Modes**:
-  - **Learning Trail (Byju's Style)**: A winding step-by-step milestone path with locked/unlocked stations, progress rings, and celebratory flags.
+  - **Learning Trail (Byju's Style)**: A winding step-by-step milestone path with locked/unlocked stations, progress rings, and celebratory confetti animations.
   - **Knowledge Graph View**: The full relational dependency graph view.
 - **Interactive Node Workspace**:
   - Embedded YouTube video player with clean time formatting.
@@ -91,28 +92,31 @@ Pathfinder addresses these challenges through a unified, prerequisite-driven arc
   - Authenticated PDF previews and secure file downloads.
   - Interactive checklists that recalculate node progress in real time.
   - Dynamic **"Continue to Next Module"** topological navigation upon completion.
-- **Explicit Lock Reasons**: Locked nodes display clear reasons (e.g., `Complete prerequisite: "Web Architecture"`).
+- **Explicit Lock Reasons**: Locked nodes display clear prerequisite reasons (e.g., `Complete prerequisite: "Web Architecture"`).
 
 #### Progression & Access Control
-- **Server-Authoritative Progression Engine**: `progressionService.js` evaluates checklist tasks, mandatory resource attestation, and quiz passing scores (`score >= passingPercentage`, default 80%) before marking nodes complete and recursively unlocking downstream nodes.
+- **Server-Authoritative Progression Engine**: [progressionService.js](file:///Users/krishnabhatia/mernfinalproject/server/src/services/progression/progressionService.js) evaluates checklist tasks, mandatory resource attestation, and quiz passing scores (`score >= passingPercentage`, default 80%) before marking nodes complete and recursively unlocking downstream nodes.
+- **Assignment Version Synchronization**: Intelligently synchronizes active student assignments when instructors publish updated roadmap versions without corrupting completed work.
 - **Single & Bulk Client Assignments**: Assign roadmaps to individual students or cohorts with expiring single-use invitation tokens.
+- **Flexible Authentication**: Support for email/password, passwordless magic login tokens, Google OAuth 2.0, and invitation links.
 - **Role-Based Guards**: Strict middleware separation (`requireAdmin` vs. `requireAuth`) isolating instructor studio controls from learner views.
 
 ### 🔮 Planned Features (Conceptual / Future Roadmap)
-- **Multi-Parent Student Linkages**: Dedicated "Parent" role allowing guardians read-only oversight of their child's progress.
-- **Automated Remediation Nodes**: Dynamic branch generation inserting practice modules when a learner fails an assessment.
-- **In-App Direct Code Execution**: Sandboxed code execution runner for browser-based programming assignments.
-- **Webhook & LMS Integrations**: LTI 1.3 / SCORM export to integrate with Canvas, Blackboard, or Google Classroom.
+- **Dedicated Parent Sub-Role**: A scoped guardian role with read-only oversight limited to their children's progress.
+- **Automated Remediation Branching**: Dynamic branch generation inserting practice modules when a learner fails an assessment multiple times.
+- **In-App Direct Code Execution**: Sandboxed containerized execution runner for browser-based programming assignments.
+- **LTI 1.3 / SCORM Integration**: Export roadmaps to integrate directly with Canvas, Blackboard, or Google Classroom.
+- **Production Email Delivery**: Automated transactional email dispatch for invitation links and progress digests (currently operates in local development capture mode).
 
 ---
 
 ## 7. How It Works
 
-Pathfinder enforces a strict prerequisite-driven learning journey. The workflow below illustrates how a learner progresses from an initial node through an assessment gate to unlock subsequent learning modules:
+Pathfinder enforces a strict prerequisite-driven learning journey. The workflow below illustrates how a learner progresses through an assigned roadmap:
 
 ```mermaid
 flowchart TD
-    A["Start: Assigned Learning Pathway"] --> B["Node 1: Foundational Theory (Available)"]
+    A["Assigned Learning Pathway"] --> B["Node 1: Foundational Theory (Available)"]
     A -.-> C["Node 2: Hands-on Practice (Locked)"]
     A -.-> D["Node 3: Milestone Assessment (Locked)"]
 
@@ -120,7 +124,9 @@ flowchart TD
     B --> B2["Watch Embedded Video Lecture"]
     B --> B3["Complete Task Checklist"]
 
-    B1 & B2 & B3 --> B4{"All Node 1 Requirements Met?"}
+    B1 --> B4{"All Node 1 Requirements Met?"}
+    B2 --> B4
+    B3 --> B4
     B4 -- No --> B["Remain In Progress"]
     B4 -- Yes --> B5["Backend Marks Node 1 Completed"]
 
@@ -151,7 +157,7 @@ The application is structured as a decoupled full-stack architecture with a Reac
 ```mermaid
 graph TB
     subgraph ClientLayer["Frontend Client (React 18 + Vite)"]
-        UI["Tailwind CSS + Lucide Icons"]
+        UI["Tailwind CSS + Lucide Icons + Three.js"]
         Canvas["Roadmap Studio (@xyflow/react)"]
         Trail["Byju's Milestone Track"]
         Workspace["Node Workspace (Markdown + Video + Quiz)"]
@@ -179,6 +185,7 @@ graph TB
             QuizEngine["quizGradingService (Scrubbed Scoring)"]
             DocExtract["documentExtractionService (PDF/Text Parser)"]
             Storage["storageService (GridFS / Local Disk)"]
+            EmailServ["emailService (SMTP / Dev Logger)"]
         end
     end
 
@@ -203,14 +210,15 @@ graph TB
 | Technology | Version | Purpose in Platform |
 | :--- | :--- | :--- |
 | **React** | `^18.3.1` | Core declarative component UI library. |
-| **Vite** | `^6.0.7` | High-performance build tool and ESM dev server. |
+| **Vite** | `^6.0.7` | High-performance build tool and ESM dev server with backend API proxy. |
 | **React Router DOM** | `^6.28.1` | Client-side routing with role-protected route guards. |
 | **@xyflow/react** | `^12.4.2` | Interactive node-based graph canvas (React Flow). |
 | **Tailwind CSS** | `^3.4.17` | Utility-first styling with custom dark-mode aesthetics. |
 | **Lucide React** | `^0.474.0` | Clean, modern iconography throughout the UI. |
-| **React Markdown** | `^9.0.3` | In-app rendering of study notes with GFM table support. |
+| **React Markdown & Remark GFM** | `^9.0.3` / `^4.0.0` | In-app rendering of study notes with GitHub-Flavored Markdown tables. |
 | **Axios** | `^1.7.9` | HTTP client with cookie interceptors and error handling. |
 | **canvas-confetti** | `^1.9.4` | Milestone completion celebration animations. |
+| **Three.js & @designcodeio/threeui** | `^0.186.1` / `^1.2.0` | Ambient background visuals and 3D UI elements. |
 
 ### Backend API
 | Technology | Version | Purpose in Platform |
@@ -224,6 +232,7 @@ graph TB
 | **Zod** | `^3.24.2` | Strict runtime request schema validation. |
 | **pdf-parse** | `^1.1.1` | Buffer-level text extraction from uploaded PDF documents. |
 | **multer** | `^1.4.5-lts.1` | Multipart/form-data handler for file and document uploads. |
+| **nodemailer** | `^6.10.0` | Transactional email delivery for invitations and password resets. |
 | **Helmet & Rate Limit** | `^8.0.0` / `^7.5.0` | HTTP security headers and brute-force request limiting. |
 
 ### Testing & Infrastructure
@@ -232,6 +241,7 @@ graph TB
 | **Vitest** | `^3.0.5` | Fast ESM unit and integration testing engine. |
 | **Supertest** | `^7.0.0` | End-to-end HTTP endpoint integration assertions. |
 | **Vercel** | Serverless | Production static hosting and serverless API execution. |
+| **Docker Compose** | Standard | Local multi-container database orchestration. |
 
 ---
 
@@ -261,7 +271,7 @@ mernfinalproject/
 │   │   ├── main.jsx                    # Application entrypoint
 │   │   └── index.css                   # Tailwind directives and custom scrollbars
 │   ├── package.json
-│   └── vite.config.js
+│   └── vite.config.js                  # Vite dev server with /api proxy to port 5001
 ├── server/                             # Backend Express REST API
 │   ├── src/
 │   │   ├── config/                     # Environment loader, MongoDB connection, Storage
@@ -282,7 +292,7 @@ mernfinalproject/
 │   └── index.js
 ├── shared/                             # Constants shared across packages
 │   └── constants/                      # Roles, statuses, node categories, question types
-├── .env.example                        # Documented environment variable template
+├── .env.example                        # Sanitized environment variable template
 ├── docker-compose.yml                  # Local MongoDB container configuration
 ├── vercel.json                         # Vercel deployment routing and rewrites
 └── package.json                        # Root npm workspaces configuration
@@ -293,9 +303,9 @@ mernfinalproject/
 ## 11. Getting Started
 
 ### Prerequisites
-- **Node.js**: `v18.0.0` or higher (verified on Node `v24`)
+- **Node.js**: `v18.0.0` or higher (verified on Node `v18` through `v24`)
 - **npm**: `v9.0.0` or higher
-- **MongoDB** *(Optional)*: If no MongoDB URI is supplied, the server automatically starts an in-memory MongoDB instance (`mongodb-memory-server`) for zero-configuration evaluation.
+- **MongoDB** *(Optional)*: If no `MONGO_URI` is supplied, the server automatically starts an in-memory MongoDB instance (`mongodb-memory-server`) for zero-configuration evaluation.
 
 ### 1. Clone the Repository
 ```bash
@@ -316,8 +326,14 @@ cp .env.example .env
 ```
 *(Review Section 12 for configuration details).*
 
-### 4. Run Development Servers
-Start both the Express API and the Vite frontend concurrently:
+### 4. Seed the Database (Optional)
+The server automatically seeds sample data on first boot if the database is empty. You can also manually seed sample roadmaps and accounts:
+```bash
+npm run seed
+```
+
+### 5. Run Development Servers
+Start both the Express API and the Vite frontend concurrently via root `concurrently`:
 ```bash
 npm run dev
 ```
@@ -331,41 +347,56 @@ npm run dev:server
 npm run dev:client
 ```
 
-### 5. Access the Platform
+> **Note on Vite Proxying**: The Vite client dev server proxies all `/api` requests to `http://localhost:5001`. This ensures that session cookies, CORS headers, and API calls function seamlessly in local development without cross-origin configuration.
+
+### 6. Access the Platform
 - **Frontend Web Application**: [http://localhost:5173](http://localhost:5173)
 - **Backend API Base**: [http://localhost:5001/api/v1](http://localhost:5001/api/v1)
 - **API Health Check**: [http://localhost:5001/api/health](http://localhost:5001/api/health)
+
+### 7. Seed Demo Credentials (Development Only)
+| Role | Email | Password | Permissions |
+| :--- | :--- | :--- | :--- |
+| **Instructor / Admin** | `admin@roadmap.local` | `Admin@123456!` | Full studio authoring, assignment management, analytics |
+| **Learner / Client** | `alex@learner.local` | `Client@123456!` | Assigned learning trail, node workspace, quiz attempts |
+
+> [!WARNING]
+> The demo credentials above are created strictly for local development and demonstration. For production deployments, configure unique administrator credentials via `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your production environment variables.
 
 ---
 
 ## 12. Environment Variables
 
-The project uses environment variables to configure ports, database connections, secrets, and third-party services. Store these in a `.env` file at the repository root.
+Store these variables in a `.env` file at the repository root.
 
-| Variable | Description | Default / Example | Required? |
+| Variable | Description | Default / Example | Scope / Requirement |
 | :--- | :--- | :--- | :---: |
 | `PORT` | Backend HTTP listening port. | `5001` | Optional |
 | `NODE_ENV` | Environment mode (`development` or `production`). | `development` | Optional |
 | `CLIENT_URL` | Base URL of the client frontend for CORS and redirects. | `http://localhost:5173` | **Required** |
+| `VITE_API_URL` | Base URL for client Axios calls. Defaults to `/api/v1` (proxied by Vite). | `/api/v1` | Optional |
 | `MONGO_URI` | MongoDB connection string. If omitted, starts in-memory DB. | `mongodb://localhost:27017/pathfinder` | Optional |
-| `JWT_SECRET` | Secret key used to sign and verify JWT session tokens. | *32+ character random string* | **Required** |
+| `JWT_SECRET` | Secret key used to sign and verify JWT session tokens. | *Random string (32+ chars)* | **Required in Prod** (Dev fallback provided) |
 | `JWT_EXPIRES_IN` | Duration before issued JWT tokens expire. | `7d` | Optional |
-| `COOKIE_SECRET` | Secret key used to sign session cookies. | *Random string* | **Required** |
-| `STORAGE_ADAPTER` | Storage provider (`local` or `gridfs`). | `gridfs` (cloud) / `local` | Optional |
+| `COOKIE_SECRET` | Secret key used to sign session cookies. | *Random string* | **Required in Prod** (Dev fallback provided) |
+| `COOKIE_SAME_SITE` | Cookie SameSite policy (`lax` or `none`). | `lax` | Optional |
+| `STORAGE_ADAPTER` | Storage provider (`gridfs`, `local`, `cloudinary`). | `gridfs` (cloud) / `local` | Optional |
 | `UPLOAD_DIR` | Directory for local file storage fallback. | `./uploads` | Optional |
 | `MAX_FILE_SIZE_MB` | Maximum permitted file upload size in megabytes. | `15` | Optional |
+| `CLOUDINARY_URL` | Cloudinary integration string for cloud assets. | `cloudinary://key:secret@cloud` | Optional |
 | `ADMIN_EMAIL` | Bootstrap administrator account email. | `admin@roadmap.local` | Optional |
 | `ADMIN_PASSWORD` | Bootstrap administrator account password. | `Admin@123456!` | Optional |
 | `EMAIL_PROVIDER` | Email provider (`development` or `smtp`). | `development` | Optional |
+| `EMAIL_FROM` | Outgoing sender email address. | `support@roadmaplearning.local` | Optional |
 | `SMTP_HOST` / `PORT` | SMTP server settings for transactional invitation emails. | `smtp.gmail.com` / `587` | Optional |
 | `SMTP_USER` / `PASS` | SMTP authentication credentials. | *(Your credentials)* | Optional |
-| `VITE_GOOGLE_CLIENT_ID`| Google Cloud OAuth 2.0 Client ID for native popup login. | *(Your Google Client ID)* | Optional |
+| `VITE_GOOGLE_CLIENT_ID`| Google Cloud OAuth 2.0 Client ID for popup login. | *(Your Google Client ID)* | Optional |
 
 ---
 
 ## 13. Application Workflow
 
-### Step 1: Educator Creates a Learning Pathway
+### Step 1: Educator Designs a Learning Pathway
 1. The instructor signs in (`admin@roadmap.local`) and enters the **Admin Studio**.
 2. Using the **Roadmap Builder**, they drag node templates onto the canvas (`start`, `learning`, `practice`, `quiz`, `project`, `completion`).
 3. Connecting nodes with edges defines prerequisite dependencies. The backend evaluates DFS graph traversal to guarantee DAG compliance.
@@ -377,39 +408,49 @@ The project uses environment variables to configure ports, database connections,
 2. The system creates an `Assignment` and initializes `NodeProgress` records:
    - Root nodes (no incoming edges) are set to `available`.
    - Downstream nodes are set to `locked` with descriptive `lockReasons`.
+3. If the recipient does not have an account, the system creates an `Invitation` token, allowing them to accept and create their password.
 
 ### Step 3: Learner Progresses Through the Pathway
 1. The learner signs in (`alex@learner.local`) and sees their assigned roadmap on the **Client Dashboard**.
 2. Opening the path displays the **Learning Milestones Trail**.
 3. The learner enters an available node workspace, completes the task checklist, attests learning materials, and completes the gated assessment quiz.
-4. Upon meeting all completion conditions, the backend transitions the node to `completed`.
+4. Upon meeting all node completion conditions, the backend transitions the node to `completed`.
 5. The progression engine recursively evaluates downstream locked nodes using an **AND rule**: when all incoming prerequisites are completed, the downstream station unlocks automatically.
+
+### Step 4: Iterative Syllabus Updates
+If an instructor publishes a new version of an assigned roadmap, `syncAssignmentProgress` reconciles active student progress—preserving completed tasks and quiz passes, updating lock reasons, and adding new nodes seamlessly.
 
 ---
 
 ## 14. Data Model
 
-Pathfinder models relationships across users, curriculum graph snapshots, student assignments, and quiz attempts:
+Pathfinder models relationships across users, curriculum graph snapshots, student assignments, invitations, and quiz attempts:
 
 ```mermaid
 erDiagram
     User ||--o{ Roadmap : "creates (owner)"
     User ||--o{ Assignment : "enrolled as client"
     User ||--o{ Assignment : "assignedBy"
+    User ||--o{ Invitation : "invitingAdmin"
+    User ||--o{ Resource : "uploads"
     Roadmap ||--o{ RoadmapVersion : "has versions"
+    Roadmap ||--o{ Assignment : "targets"
+    Roadmap ||--o{ Invitation : "targets"
     RoadmapVersion ||--o{ Assignment : "pinned to"
+    RoadmapVersion ||--o{ Invitation : "pinned to"
     Assignment ||--o{ NodeProgress : "tracks"
     Assignment ||--o{ QuizAttempt : "records"
     Quiz ||--o{ QuizAttempt : "graded against"
-    User ||--o{ Resource : "uploads"
 
     User {
         ObjectId _id PK
         string name
         string email
         string passwordHash
-        string role "admin | client"
-        string authProvider "local | google | magic"
+        string role "admin or client"
+        string accountStatus "active, suspended, pending_invitation"
+        string googleId
+        string magicLoginToken
     }
 
     Roadmap {
@@ -417,19 +458,34 @@ erDiagram
         string title
         string description
         string category
-        string visibility "private | shared"
-        string status "draft | published | archived"
+        string visibility "private or shared"
+        string status "draft, published, archived"
         ObjectId owner FK
         ObjectId currentPublishedVersion FK
+        Array draftNodes
+        Array draftEdges
     }
 
     RoadmapVersion {
         ObjectId _id PK
         ObjectId parentRoadmap FK
         int versionNumber
-        Array nodes "id, title, type, tasks, resources, quizConfig"
-        Array edges "source, target"
+        Array nodes "id, title, type, tasks, resources, quizConfig, completionConditions"
+        Array edges "id, source, target, type"
         ObjectId author FK
+        string publicationNotes
+    }
+
+    Invitation {
+        ObjectId _id PK
+        string targetEmail
+        string tokenHash
+        ObjectId roadmap FK
+        ObjectId publishedVersion FK
+        ObjectId invitingAdmin FK
+        string status "pending, accepted, expired, revoked"
+        Date expiresAt
+        ObjectId acceptedUser FK
     }
 
     Assignment {
@@ -438,7 +494,9 @@ erDiagram
         string targetEmail
         ObjectId roadmap FK
         ObjectId publishedVersion FK
-        string status "active | completed | archived | revoked"
+        ObjectId assignedBy FK
+        ObjectId invitation FK
+        string status "active, completed, archived, revoked"
         int progressPercentage
     }
 
@@ -446,7 +504,7 @@ erDiagram
         ObjectId _id PK
         ObjectId assignment FK
         string nodeId
-        string status "locked | available | in_progress | completed"
+        string status "locked, available, in_progress, completed, failed"
         Array completedTasks
         Array completedResources
         boolean passedQuiz
@@ -456,27 +514,34 @@ erDiagram
     Quiz {
         ObjectId _id PK
         string title
-        ObjectId author FK
+        ObjectId owner FK
         int passingPercentage
-        Array questions "prompt, type, options, answerKey, points"
+        int timeLimitMinutes
+        boolean randomizeQuestions
+        boolean randomizeOptions
+        Array questions "prompt, type, options, correctAnswers, points"
     }
 
     QuizAttempt {
         ObjectId _id PK
         ObjectId assignment FK
-        ObjectId quiz FK
+        ObjectId quizId FK
+        ObjectId clientId FK
         string nodeId
+        int attemptNumber
         int score
-        int totalPoints
+        int maxScore
         int percentage
         boolean passed
-        Date completedAt
+        Date submittedAt
     }
 
     Resource {
         ObjectId _id PK
         string title
-        string type "markdown | pdf | video | link"
+        string type "markdown, pdf, text, link, video, book, exercise, file"
+        string content
+        string externalUrl
         string storageKey
         ObjectId uploader FK
     }
@@ -486,7 +551,7 @@ erDiagram
 
 ## 15. API Documentation
 
-All application endpoints are served under `/api/v1` and return standardized JSON responses:
+All application endpoints are served under `/api/v1` (with health routes accessible at `/api/health` and `/api/v1/health`) and return standardized JSON responses:
 
 ```json
 {
@@ -496,30 +561,74 @@ All application endpoints are served under `/api/v1` and return standardized JSO
 }
 ```
 
-### Core API Endpoints
-
-| Method | Endpoint | Description | Auth Required | Request Body / Parameters |
+### 1. Authentication & Session Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
 | :--- | :--- | :--- | :---: | :--- |
 | `GET` | `/api/health` | Healthcheck and server status. | None | None |
-| `POST` | `/api/v1/auth/google` | Google OAuth / Direct personal authentication. | None | `{ role, profile }` |
+| `POST` | `/api/v1/auth/google` | Google OAuth & direct profile authentication. | None | `{ role, profile }` |
 | `POST` | `/api/v1/auth/register` | Register a new user account. | None | `{ name, email, password, role }` |
 | `POST` | `/api/v1/auth/login` | Sign in with email and password. | None | `{ email, password }` |
+| `POST` | `/api/v1/auth/magic-login/request` | Request passwordless login token via email. | None | `{ email }` |
+| `POST` | `/api/v1/auth/magic-login/verify` | Authenticate using passwordless magic token. | None | `{ token }` |
+| `POST` | `/api/v1/auth/forgot-password` | Request password reset token. | None | `{ email }` |
+| `POST` | `/api/v1/auth/reset-password` | Reset account password using token. | None | `{ token, newPassword }` |
+| `GET` | `/api/v1/auth/invitations/:token` | Verify single-use assignment invitation token. | None | Param: `token` |
+| `POST` | `/api/v1/auth/invitations/accept` | Accept invitation & activate client account. | None | `{ token, name, password }` |
 | `POST` | `/api/v1/auth/logout` | Clear HTTP-only session cookie. | None | None |
 | `GET` | `/api/v1/auth/me` | Fetch authenticated user profile. | `requireAuth` | None |
-| `GET` | `/api/v1/admin/roadmaps` | List roadmaps created by instructor. | `requireAdmin`| Query: `?status=&search=` |
-| `POST` | `/api/v1/admin/roadmaps` | Create a new roadmap container. | `requireAdmin`| `{ title, description, category }` |
-| `PUT` | `/api/v1/admin/roadmaps/:id/draft` | Save canvas nodes, edges, and config. | `requireAdmin`| `{ nodes, edges }` |
-| `POST` | `/api/v1/admin/roadmaps/:id/publish` | Validate DAG & publish version snapshot. | `requireAdmin`| `{ publicationNotes }` |
-| `POST` | `/api/v1/assignments` | Assign published roadmap to client. | `requireAdmin`| `{ roadmapId, clientEmail }` |
-| `POST` | `/api/v1/assignments/bulk` | Bulk assign roadmap to multiple emails. | `requireAdmin`| `{ roadmapId, clientEmails: [] }` |
+
+### 2. Admin Roadmap Studio Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
+| :--- | :--- | :--- | :---: | :--- |
+| `GET` | `/api/v1/admin/roadmaps` | List roadmaps created by instructor. | `requireAdmin` | Query: `?status=&search=` |
+| `POST` | `/api/v1/admin/roadmaps` | Create a new roadmap container. | `requireAdmin` | `{ title, description, category }` |
+| `GET` | `/api/v1/admin/roadmaps/:roadmapId` | Fetch roadmap draft canvas and metadata. | `requireAdmin` | Param: `roadmapId` |
+| `PATCH` | `/api/v1/admin/roadmaps/:roadmapId` | Update roadmap metadata (title, category). | `requireAdmin` | `{ title, description, category }` |
+| `DELETE` | `/api/v1/admin/roadmaps/:roadmapId` | Delete roadmap and draft state. | `requireAdmin` | Param: `roadmapId` |
+| `PUT` | `/api/v1/admin/roadmaps/:roadmapId/draft` | Save canvas nodes, edges, and node configs. | `requireAdmin` | `{ nodes, edges }` |
+| `POST` | `/api/v1/admin/roadmaps/:roadmapId/publish` | Validate DAG & publish version snapshot. | `requireAdmin` | `{ publicationNotes }` |
+| `POST` | `/api/v1/admin/roadmaps/:roadmapId/duplicate` | Clone roadmap with all nodes and config. | `requireAdmin` | Param: `roadmapId` |
+
+### 3. Assignments & Invitations Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
+| :--- | :--- | :--- | :---: | :--- |
+| `GET` | `/api/v1/assignments` | List all student assignments and statuses. | `requireAdmin` | Query: `?status=&roadmapId=` |
+| `POST` | `/api/v1/assignments` | Assign roadmap to an individual student email. | `requireAdmin` | `{ roadmapId, clientEmail }` |
+| `POST` | `/api/v1/assignments/bulk` | Bulk assign roadmap to multiple emails. | `requireAdmin` | `{ roadmapId, clientEmails: [] }` |
+| `POST` | `/api/v1/assignments/:assignmentId/revoke` | Revoke student access to an assignment. | `requireAdmin` | Param: `assignmentId` |
+| `POST` | `/api/v1/assignments/:assignmentId/resend-invitation` | Resend expiring invitation token. | `requireAdmin` | Param: `assignmentId` |
+
+### 4. Client Learning Workspace Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
+| :--- | :--- | :--- | :---: | :--- |
 | `GET` | `/api/v1/client/dashboard` | Fetch student assignments & statistics. | `requireAuth` | None |
-| `GET` | `/api/v1/client/assignments/:id/roadmap` | Fetch roadmap view with node statuses. | `requireAuth` | Param: `assignmentId` |
-| `GET` | `/api/v1/client/assignments/:id/nodes/:nodeId` | Enter node workspace (enforces lock gate). | `requireAuth` | Params: `assignmentId`, `nodeId` |
-| `POST` | `/api/v1/client/assignments/:id/nodes/:nodeId/tasks/:taskId/complete` | Toggle checklist task completion. | `requireAuth` | `{ isCompleted: boolean }` |
-| `POST` | `/api/v1/client/assignments/:id/nodes/:nodeId/quiz/start` | Start timed assessment (answers stripped).| `requireAuth` | None |
-| `POST` | `/api/v1/client/assignments/:id/nodes/:nodeId/quiz/attempts/:attemptId/submit` | Submit answers for server grading. | `requireAuth` | `{ answers: [] }` |
-| `GET` | `/api/v1/resources/:id/download` | Stream protected PDF/file resource. | `requireAuth` | Param: `resourceId` |
-| `GET` | `/api/v1/analytics/dashboard` | Cohort pass rates and active assignments.| `requireAdmin`| None |
+| `POST` | `/api/v1/client/assignments/:assignmentId/accept` | Accept and activate assigned pathway. | `requireAuth` | Param: `assignmentId` |
+| `GET` | `/api/v1/client/assignments/:assignmentId/roadmap` | Fetch roadmap view with node statuses. | `requireAuth` | Param: `assignmentId` |
+| `GET` | `/api/v1/client/assignments/:assignmentId/nodes/:nodeId` | Enter node workspace (enforces lock gate). | `requireAuth` | Params: `assignmentId`, `nodeId` |
+| `POST` | `/api/v1/client/assignments/:assignmentId/nodes/:nodeId/tasks/:taskId/complete` | Toggle checklist task completion. | `requireAuth` | `{ isCompleted: boolean }` |
+| `POST` | `/api/v1/client/assignments/:assignmentId/nodes/:nodeId/resources/:resourceId/complete` | Attest resource view/completion. | `requireAuth` | Params: `assignmentId`, `nodeId`, `resourceId` |
+| `POST` | `/api/v1/client/assignments/:assignmentId/nodes/:nodeId/quiz/start` | Start timed assessment (answers stripped). | `requireAuth` | None |
+| `POST` | `/api/v1/client/assignments/:assignmentId/nodes/:nodeId/quiz/attempts/:attemptId/submit` | Submit answers for server grading. | `requireAuth` | `{ answers: [] }` |
+
+### 5. Quizzes & Question Extraction Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
+| :--- | :--- | :--- | :---: | :--- |
+| `GET` | `/api/v1/quizzes` | List instructor quiz question banks. | `requireAdmin` | None |
+| `POST` | `/api/v1/quizzes` | Create a new quiz with passing percentage. | `requireAdmin` | `{ title, questions: [], passingPercentage }` |
+| `GET` | `/api/v1/quizzes/:quizId` | Fetch full quiz details with answer keys. | `requireAdmin` | Param: `quizId` |
+| `PATCH` | `/api/v1/quizzes/:quizId` | Update quiz settings and question items. | `requireAdmin` | `{ title, questions, passingPercentage }` |
+| `DELETE` | `/api/v1/quizzes/:quizId` | Delete quiz from question bank. | `requireAdmin` | Param: `quizId` |
+| `POST` | `/api/v1/quizzes/import` | Bulk import questions from CSV / JSON. | `requireAdmin` | `{ questions: [] }` |
+| `POST` | `/api/v1/quizzes/extract-document` | Extract candidate questions from PDF/Text. | `requireAdmin` | Multipart: `document` file |
+
+### 6. Resources & Analytics Endpoints
+| Method | Route | Description | Auth Required | Parameters / Body |
+| :--- | :--- | :--- | :---: | :--- |
+| `GET` | `/api/v1/resources` | List uploaded learning resources. | `requireAdmin` | None |
+| `POST` | `/api/v1/resources` | Upload file (PDF/Markdown/Media) or link. | `requireAdmin` | Multipart: `file` or `{ title, type, content }` |
+| `GET` | `/api/v1/resources/:resourceId/download` | Stream protected PDF/file resource. | `requireAuth` | Param: `resourceId` |
+| `GET` | `/api/v1/analytics/dashboard` | Overall cohort pass rates and assignments. | `requireAdmin` | None |
+| `GET` | `/api/v1/analytics/roadmaps/:roadmapId` | Detailed metrics for a specific roadmap. | `requireAdmin` | Param: `roadmapId` |
 
 ---
 
