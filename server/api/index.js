@@ -18,7 +18,7 @@ async function ensureDB() {
 }
 
 export default async function handler(req, res) {
-  if (req.url === '/health' || req.url === '/api/health') {
+  if (req.url === '/health' || req.url === '/api/health' || req.url === '/api/v1/health') {
     return app(req, res);
   }
 

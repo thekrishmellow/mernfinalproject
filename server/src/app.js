@@ -50,7 +50,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser(env.COOKIE_SECRET));
 
 // Healthcheck
-app.get(['/health', '/api/health'], (req, res) => {
+app.get(['/health', '/api/health', '/api/v1/health'], (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
