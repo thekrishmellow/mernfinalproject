@@ -131,16 +131,39 @@ export async function getClientDashboard(req, res, next) {
   }
 }
 
+/**
+ * Helper to retrieve an assignment if the user is authorized (either as an admin previewing,
+ * or as the assigned client matching client ID or target email).
+ */
+async function findAuthorizedAssignment(assignmentId, user) {
+  const filter =
+    user.role === 'admin'
+      ? { _id: assignmentId }
+      : {
+          _id: assignmentId,
+          $or: [
+            { client: user._id },
+            { targetEmail: user.email ? user.email.toLowerCase().trim() : '' }
+          ]
+        };
+
+  let assignment = await Assignment.findOne(filter)
+    .populate('roadmap')
+    .populate('publishedVersion');
+
+  if (assignment && !assignment.client && user.role !== 'admin') {
+    assignment.client = user._id;
+    await assignment.save();
+  }
+
+  return assignment;
+}
+
 export async function getAssignedRoadmap(req, res, next) {
   try {
     const { assignmentId } = req.params;
 
-    let assignment = await Assignment.findOne({
-      _id: assignmentId,
-      client: req.user._id
-    })
-      .populate('roadmap')
-      .populate('publishedVersion');
+    let assignment = await findAuthorizedAssignment(assignmentId, req.user);
 
     if (!assignment) {
       return res.status(404).json({
@@ -149,10 +172,10 @@ export async function getAssignedRoadmap(req, res, next) {
       });
     }
 
-    // Dynamic auto-upgrade: If roadmap has a newer published version, sync immediately!
+    // Dynamic auto-upgrade / fallback: If publishedVersion is missing or roadmap has newer published version, sync!
     if (
       assignment.roadmap?.currentPublishedVersion &&
-      assignment.publishedVersion?._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString()
+      (!assignment.publishedVersion || assignment.publishedVersion._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString())
     ) {
       const latestVersion = await RoadmapVersion.findById(assignment.roadmap.currentPublishedVersion);
       if (latestVersion) {
@@ -202,7 +225,7 @@ export async function getAssignedRoadmap(req, res, next) {
         assignment,
         roadmap: assignment.roadmap,
         version: {
-          versionNumber: assignment.publishedVersion.versionNumber,
+          versionNumber: assignment.publishedVersion?.versionNumber || 1,
           nodes: sortedNodes,
           edges: versionEdges
         }
@@ -217,12 +240,7 @@ export async function getNodeWorkspace(req, res, next) {
   try {
     const { assignmentId, nodeId } = req.params;
 
-    let assignment = await Assignment.findOne({
-      _id: assignmentId,
-      client: req.user._id
-    })
-      .populate('roadmap')
-      .populate('publishedVersion');
+    let assignment = await findAuthorizedAssignment(assignmentId, req.user);
 
     if (!assignment) {
       return res.status(404).json({
@@ -231,10 +249,10 @@ export async function getNodeWorkspace(req, res, next) {
       });
     }
 
-    // Auto-upgrade if newer version exists
+    // Auto-upgrade if newer version exists or if publishedVersion is missing
     if (
       assignment.roadmap?.currentPublishedVersion &&
-      assignment.publishedVersion?._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString()
+      (!assignment.publishedVersion || assignment.publishedVersion._id?.toString() !== assignment.roadmap.currentPublishedVersion.toString())
     ) {
       const latestVersion = await RoadmapVersion.findById(assignment.roadmap.currentPublishedVersion);
       if (latestVersion) {
@@ -291,6 +309,40 @@ export async function getNodeWorkspace(req, res, next) {
       nodeId
     }).sort({ attemptNumber: -1 });
 
+    // Calculate topological sequence to supply prevNode and nextNode
+    const allVersionNodes = assignment.publishedVersion?.nodes || [];
+    const allVersionEdges = assignment.publishedVersion?.edges || [];
+    const sortedAllNodes = sortRoadmapNodes(allVersionNodes, allVersionEdges);
+    const currentIndex = sortedAllNodes.findIndex((n) => n.id === nodeId);
+
+    let nextNode = null;
+    let prevNode = null;
+
+    if (currentIndex >= 0) {
+      if (currentIndex > 0) {
+        const prevCandidate = sortedAllNodes[currentIndex - 1];
+        prevNode = {
+          id: prevCandidate.id,
+          title: prevCandidate.title,
+          type: prevCandidate.type
+        };
+      }
+
+      if (currentIndex < sortedAllNodes.length - 1) {
+        const nextCandidate = sortedAllNodes[currentIndex + 1];
+        const nextProgress = await NodeProgress.findOne({
+          assignment: assignment._id,
+          nodeId: nextCandidate.id
+        });
+        nextNode = {
+          id: nextCandidate.id,
+          title: nextCandidate.title,
+          type: nextCandidate.type,
+          status: nextProgress?.status || 'locked'
+        };
+      }
+    }
+
     return res.json({
       success: true,
       data: {
@@ -298,7 +350,9 @@ export async function getNodeWorkspace(req, res, next) {
         progress,
         resources,
         quiz,
-        quizAttempts
+        quizAttempts,
+        nextNode,
+        prevNode
       }
     });
   } catch (error) {
@@ -318,7 +372,7 @@ export async function updateResourceCompletion(req, res, next) {
     const { assignmentId, nodeId, resourceId } = req.params;
     const { isCompleted } = req.body;
 
-    const assignment = await Assignment.findOne({ _id: assignmentId, client: req.user._id });
+    const assignment = await findAuthorizedAssignment(assignmentId, req.user);
     if (!assignment) {
       return res.status(404).json({ success: false, message: 'Assignment not found.' });
     }
@@ -366,7 +420,7 @@ export async function updateTaskCompletion(req, res, next) {
     const { assignmentId, nodeId, taskId } = req.params;
     const { isCompleted } = req.body;
 
-    const assignment = await Assignment.findOne({ _id: assignmentId, client: req.user._id });
+    const assignment = await findAuthorizedAssignment(assignmentId, req.user);
     if (!assignment) {
       return res.status(404).json({ success: false, message: 'Assignment not found.' });
     }
@@ -410,7 +464,7 @@ export async function startQuizAttempt(req, res, next) {
   try {
     const { assignmentId, nodeId } = req.params;
 
-    const assignment = await Assignment.findOne({ _id: assignmentId, client: req.user._id }).populate('publishedVersion');
+    const assignment = await findAuthorizedAssignment(assignmentId, req.user);
     if (!assignment) {
       return res.status(404).json({ success: false, message: 'Assignment not found.' });
     }
@@ -455,7 +509,7 @@ export async function startQuizAttempt(req, res, next) {
       assignment: assignment._id,
       nodeId,
       quizId: quiz._id,
-      clientId: req.user._id,
+      clientId: assignment.client || req.user._id,
       attemptNumber: existingAttempts + 1,
       questionSnapshots: learnerQuestions,
       passingPercentage: nodeConfig.quizConfig.passingPercentage || quiz.passingPercentage || 80,
@@ -488,19 +542,21 @@ export async function submitQuizAttempt(req, res, next) {
     const { assignmentId, nodeId, attemptId } = req.params;
     const { answers } = req.body;
 
-    const assignment = await Assignment.findOne({ _id: assignmentId, client: req.user._id });
+    const assignment = await findAuthorizedAssignment(assignmentId, req.user);
     if (!assignment) {
       return res.status(404).json({ success: false, message: 'Assignment not found.' });
     }
 
     await verifyNodeAccess(assignment._id, nodeId);
 
-    const attempt = await QuizAttempt.findOne({
+    const attemptFilter = {
       _id: attemptId,
       assignment: assignment._id,
       nodeId,
-      clientId: req.user._id
-    });
+      ...(req.user.role === 'admin' ? {} : { clientId: req.user._id })
+    };
+
+    const attempt = await QuizAttempt.findOne(attemptFilter);
 
     if (!attempt) {
       return res.status(404).json({ success: false, message: 'Quiz attempt not found.' });

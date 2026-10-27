@@ -73,6 +73,27 @@ export function ClientRoadmapViewPage() {
     );
   }
 
+  if (!assignment || !roadmap || !version) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center space-y-5">
+        <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 text-amber-500 mx-auto flex items-center justify-center text-2xl shadow-sm">
+          <Compass className="w-8 h-8 text-amber-500" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-black text-slate-800">Learning Pathway Unavailable</h2>
+          <p className="text-xs text-slate-500">
+            This roadmap assignment could not be loaded or is not assigned to your account.
+          </p>
+        </div>
+        <Link to="/client/dashboard">
+          <button className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:scale-105 transition-all">
+            Return to Dashboard
+          </button>
+        </Link>
+      </div>
+    );
+  }
+
   const rawNodes = version?.nodes || [];
   const edges = version?.edges || [];
   const nodes = useMemo(() => sortRoadmapNodes(rawNodes, edges), [rawNodes, edges]);

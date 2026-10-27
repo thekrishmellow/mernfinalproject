@@ -43,8 +43,10 @@ function ProtectedRoute({ children, requiredRole }) {
   }
 
   if (requiredRole && user.role !== requiredRole) {
+    // If admin visits client route, allow them to preview/test client learning experience
+    if (user.role === 'admin') return children;
     // If client visits admin route, send to client dashboard
-    if (user.role === 'client') return <Navigate to="/client/dashboard" replace />;
+    if (user.role === 'client' && requiredRole === 'admin') return <Navigate to="/client/dashboard" replace />;
     return <Navigate to="/admin/dashboard" replace />;
   }
 

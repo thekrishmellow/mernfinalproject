@@ -111,7 +111,15 @@ export function ClientNodeWorkspacePage() {
 
       if (res.data.completed) {
         confetti({ particleCount: 70, spread: 60 });
-        toast.success('Congratulations! Node requirements fulfilled.');
+        toast.success('Congratulations! Node requirements fulfilled. Next checkpoint unlocked!');
+        fetchWorkspace();
+      } else {
+        // Also check if all tasks are complete to refresh next node status
+        const completedCount = (res.data.progress?.completedTasks || []).length;
+        const totalCount = data?.node?.tasks?.length || 0;
+        if (totalCount > 0 && completedCount >= totalCount) {
+          fetchWorkspace();
+        }
       }
     } catch (err) {
       toast.error('Failed to update task state');
@@ -132,7 +140,8 @@ export function ClientNodeWorkspacePage() {
 
       if (res.data.completed) {
         confetti({ particleCount: 70, spread: 60 });
-        toast.success('Congratulations! Node requirements fulfilled.');
+        toast.success('Congratulations! Node requirements fulfilled. Next checkpoint unlocked!');
+        fetchWorkspace();
       }
     } catch (err) {
       toast.error('Failed to update resource state');
@@ -229,6 +238,8 @@ export function ClientNodeWorkspacePage() {
   const progress = data?.progress;
   const resources = data?.resources || [];
   const quiz = data?.quiz;
+  const nextNode = data?.nextNode;
+  const prevNode = data?.prevNode;
   const isCompleted = progress?.status === 'completed';
 
   const completedTaskCount = (progress?.completedTasks || []).length;
@@ -241,7 +252,7 @@ export function ClientNodeWorkspacePage() {
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link to={`/client/assignments/${assignmentId}/roadmap`}>
-            <button className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+            <button className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors" title="Back to Roadmap Trail">
               <ArrowLeft className="w-4 h-4" />
             </button>
           </Link>
@@ -271,12 +282,55 @@ export function ClientNodeWorkspacePage() {
           </div>
         </div>
 
-        {isCompleted && (
-          <div className="px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 self-start sm:self-auto shadow-sm">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            Checkpoint Completed!
-          </div>
-        )}
+        {/* Navigation & Status Header Actions */}
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          {prevNode && (
+            <button
+              onClick={() => navigate(`/client/assignments/${assignmentId}/nodes/${prevNode.id}`)}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+              title={`Previous Module: ${prevNode.title}`}
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Prev</span>
+            </button>
+          )}
+
+          {isCompleted && (
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>Checkpoint Done</span>
+            </div>
+          )}
+
+          {nextNode ? (
+            <button
+              onClick={() => navigate(`/client/assignments/${assignmentId}/nodes/${nextNode.id}`)}
+              className={`px-4 py-2 rounded-full font-extrabold text-xs shadow-md flex items-center gap-2 transition-all ${
+                isCompleted || taskPercentage === 100
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                  : nextNode.status !== 'locked'
+                  ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/20'
+                  : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
+              disabled={!(isCompleted || taskPercentage === 100 || nextNode.status !== 'locked')}
+              title={nextNode.status === 'locked' && !isCompleted ? 'Complete current tasks to unlock' : `Next: ${nextNode.title}`}
+            >
+              <span>Next: {nextNode.title}</span>
+              {nextNode.status === 'locked' && !isCompleted ? (
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
+            </button>
+          ) : (
+            <Link to={`/client/assignments/${assignmentId}/roadmap`}>
+              <button className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+                <Award className="w-4 h-4" />
+                <span>Roadmap Trail</span>
+              </button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -481,6 +535,40 @@ export function ClientNodeWorkspacePage() {
                   </div>
                 );
               })}
+
+              {/* Direct Next Module Action Banner upon task completion */}
+              {(isCompleted || taskPercentage === 100) && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-orange-500/10 border border-emerald-300/80 text-slate-800 space-y-3 mt-3 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shadow-md shadow-emerald-500/20">
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-xs text-slate-800">All Tasks Completed!</div>
+                      <div className="text-[11px] text-slate-500">
+                        {nextNode ? 'Next checkpoint unlocked and ready' : 'You have completed the entire curriculum!'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {nextNode ? (
+                    <button
+                      onClick={() => navigate(`/client/assignments/${assignmentId}/nodes/${nextNode.id}`)}
+                      className="w-full py-3 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-xs shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                    >
+                      <span>Continue to Next Module: {nextNode.title}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <Link to={`/client/assignments/${assignmentId}/roadmap`}>
+                      <button className="w-full py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all">
+                        <Award className="w-4 h-4" />
+                        <span>Curriculum Complete! View Trail</span>
+                      </button>
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
