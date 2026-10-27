@@ -7,13 +7,18 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
   const previousActiveElement = useRef(null);
   const onCloseRef = useRef(onClose);
 
+  const hasFocusedRef = useRef(false);
+
   // Keep latest onClose callback reference without re-running effects
   useEffect(() => {
     onCloseRef.current = onClose;
   });
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      hasFocusedRef.current = false;
+      return;
+    }
 
     previousActiveElement.current = document.activeElement;
 
@@ -52,25 +57,26 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Focus first input or interactive element once upon opening
-    const timer = setTimeout(() => {
-      if (modalRef.current && !modalRef.current.contains(document.activeElement)) {
-        const firstInput = modalRef.current.querySelector(
-          'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])'
-        );
-        if (firstInput) {
-          firstInput.focus();
-        } else {
-          const firstFocusable = modalRef.current.querySelector(
-            'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    // Focus first input or textarea ONCE upon initial opening; NEVER steal focus while user is typing
+    let timer = null;
+    if (!hasFocusedRef.current) {
+      hasFocusedRef.current = true;
+      timer = setTimeout(() => {
+        if (modalRef.current) {
+          // If the user already focused an element, do not disturb them
+          if (modalRef.current.contains(document.activeElement) && document.activeElement !== modalRef.current) {
+            return;
+          }
+          const firstInput = modalRef.current.querySelector(
+            'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])'
           );
-          firstFocusable?.focus();
+          firstInput?.focus();
         }
-      }
-    }, 50);
+      }, 50);
+    }
 
     return () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalOverflow;
       if (previousActiveElement.current && typeof previousActiveElement.current.focus === 'function') {
@@ -109,6 +115,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
             {title}
           </h3>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close dialog"
             className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 transition-colors"
