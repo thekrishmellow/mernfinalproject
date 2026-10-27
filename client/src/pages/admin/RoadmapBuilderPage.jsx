@@ -61,11 +61,11 @@ export function RoadmapBuilderPage() {
     } finally {
       setLoading(false);
     }
-  }, [roadmapId, toast]);
+  }, [roadmapId]);
 
   useEffect(() => {
     fetchRoadmapData();
-  }, [fetchRoadmapData]);
+  }, [roadmapId]);
 
   const handleCanvasChange = (updatedNodes, updatedEdges) => {
     setNodes(updatedNodes);

@@ -18,16 +18,21 @@ export function ToastProvider({ children }) {
     }
   }, []);
 
-  const removeToast = (id) => {
+  const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
-  const success = (msg) => addToast(msg, 'success');
-  const error = (msg) => addToast(msg, 'error', 5000);
-  const info = (msg) => addToast(msg, 'info');
+  const success = useCallback((msg) => addToast(msg, 'success'), [addToast]);
+  const error = useCallback((msg) => addToast(msg, 'error', 5000), [addToast]);
+  const info = useCallback((msg) => addToast(msg, 'info'), [addToast]);
+
+  const value = React.useMemo(
+    () => ({ addToast, success, error, info, removeToast }),
+    [addToast, success, error, info, removeToast]
+  );
 
   return (
-    <ToastContext.Provider value={{ addToast, success, error, info }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div
         className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"
