@@ -215,11 +215,11 @@ export function GoogleAuthCard({ initialRole = 'client', defaultView = 'login' }
     if (roleToFill === 'admin') {
       setEmail('admin@roadmap.local');
       setPassword('Admin@123456!');
-      toast.info('Filled Administrator demo credentials');
+      toast.info('Filled Administrator demo credentials (admin@roadmap.local)');
     } else {
-      setEmail('learner@roadmap.local');
-      setPassword('Learner@123456!');
-      toast.info('Filled Learner demo credentials');
+      setEmail('alex@learner.local');
+      setPassword('Client@123456!');
+      toast.info('Filled Learner demo credentials (alex@learner.local)');
     }
   };
 
@@ -409,7 +409,7 @@ export function GoogleAuthCard({ initialRole = 'client', defaultView = 'login' }
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
+                  placeholder="e.g. alex@learner.local or admin@roadmap.local"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                 />
               </div>
@@ -454,19 +454,25 @@ export function GoogleAuthCard({ initialRole = 'client', defaultView = 'login' }
             <button
               type="button"
               onClick={() => fillDemoAccount('admin')}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-purple-950/40 border border-slate-800 hover:border-purple-600/40 text-[11px] font-medium text-slate-300 hover:text-purple-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-950 hover:bg-purple-950/40 border border-slate-800 hover:border-purple-600/40 text-left transition-all cursor-pointer group"
             >
-              <Shield className="w-3 h-3 text-purple-400" />
-              <span>Admin Demo</span>
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300 group-hover:text-purple-300">
+                <Shield className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span>Admin Demo</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">admin@roadmap.local</div>
             </button>
 
             <button
               type="button"
               onClick={() => fillDemoAccount('client')}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-950/40 border border-slate-800 hover:border-indigo-600/40 text-[11px] font-medium text-slate-300 hover:text-indigo-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-950 hover:bg-indigo-950/40 border border-slate-800 hover:border-indigo-600/40 text-left transition-all cursor-pointer group"
             >
-              <GraduationCap className="w-3 h-3 text-indigo-400" />
-              <span>Learner Demo</span>
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300 group-hover:text-indigo-300">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>Learner Demo</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">alex@learner.local</div>
             </button>
           </div>
         </div>
