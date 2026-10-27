@@ -11,6 +11,18 @@ export function AuthProvider({ children }) {
   const checkAuth = useCallback(async () => {
     try {
       setLoading(true);
+
+      // Support token passed via URL parameter (e.g. magic login links, redirects, or session tokens)
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlToken = searchParams.get('token') || searchParams.get('pathfinder_token');
+      if (urlToken) {
+        localStorage.setItem(TOKEN_KEY, urlToken);
+        searchParams.delete('token');
+        searchParams.delete('pathfinder_token');
+        const newSearch = searchParams.toString() ? `?${searchParams.toString()}` : '';
+        window.history.replaceState({}, document.title, window.location.pathname + newSearch + window.location.hash);
+      }
+
       const res = await api.get('/auth/me');
       if (res.success && res.data?.user) {
         setUser(res.data.user);
