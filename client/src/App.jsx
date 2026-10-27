@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './state/AuthContext.jsx';
 import { ToastProvider } from './components/ui/Toast.jsx';
+import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx';
 import { AppLayout } from './components/layout/AppLayout.jsx';
 
 // Auth Pages
@@ -74,54 +75,56 @@ export function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public Auth Routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/magic-login" element={<MagicLoginPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+        <ErrorBoundary>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Auth Routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/magic-login" element={<MagicLoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
-            {/* Root Landing Redirect */}
-            <Route path="/" element={<RootRedirect />} />
+              {/* Root Landing Redirect */}
+              <Route path="/" element={<RootRedirect />} />
 
-            {/* Admin Studio Protected Routes */}
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="dashboard" element={<AdminDashboardPage />} />
-              <Route path="roadmaps" element={<RoadmapsListPage />} />
-              <Route path="roadmaps/:roadmapId/builder" element={<RoadmapBuilderPage />} />
-              <Route path="assignments" element={<AssignmentsPage />} />
-              <Route path="quizzes" element={<QuizzesPage />} />
-              <Route path="resources" element={<ResourcesPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-            </Route>
+              {/* Admin Studio Protected Routes */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="dashboard" element={<AdminDashboardPage />} />
+                <Route path="roadmaps" element={<RoadmapsListPage />} />
+                <Route path="roadmaps/:roadmapId/builder" element={<RoadmapBuilderPage />} />
+                <Route path="assignments" element={<AssignmentsPage />} />
+                <Route path="quizzes" element={<QuizzesPage />} />
+                <Route path="resources" element={<ResourcesPage />} />
+                <Route path="analytics" element={<AnalyticsPage />} />
+              </Route>
 
-            {/* Client Learner Protected Routes */}
-            <Route
-              path="/client"
-              element={
-                <ProtectedRoute requiredRole="client">
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="dashboard" element={<ClientDashboardPage />} />
-              <Route path="assignments/:assignmentId/roadmap" element={<ClientRoadmapViewPage />} />
-              <Route path="assignments/:assignmentId/nodes/:nodeId" element={<ClientNodeWorkspacePage />} />
-            </Route>
+              {/* Client Learner Protected Routes */}
+              <Route
+                path="/client"
+                element={
+                  <ProtectedRoute requiredRole="client">
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="dashboard" element={<ClientDashboardPage />} />
+                <Route path="assignments/:assignmentId/roadmap" element={<ClientRoadmapViewPage />} />
+                <Route path="assignments/:assignmentId/nodes/:nodeId" element={<ClientNodeWorkspacePage />} />
+              </Route>
 
-            {/* Catch-all */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+              {/* Catch-all */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </ErrorBoundary>
       </ToastProvider>
     </AuthProvider>
   );

@@ -34,6 +34,13 @@ export function ClientRoadmapViewPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
+  const rawNodes = version?.nodes || [];
+  const edges = version?.edges || [];
+  const nodes = useMemo(() => {
+    if (!rawNodes || rawNodes.length === 0) return [];
+    return sortRoadmapNodes(rawNodes, edges);
+  }, [rawNodes, edges]);
+
   useEffect(() => {
     const fetchRoadmap = async () => {
       try {
@@ -93,10 +100,6 @@ export function ClientRoadmapViewPage() {
       </div>
     );
   }
-
-  const rawNodes = version?.nodes || [];
-  const edges = version?.edges || [];
-  const nodes = useMemo(() => sortRoadmapNodes(rawNodes, edges), [rawNodes, edges]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">

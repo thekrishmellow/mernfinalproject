@@ -33,8 +33,6 @@ export function NodeConfigPanel({
   availableQuizzes = [],
   onResourceCreated = null
 }) {
-  if (!node) return null;
-
   const [activeTab, setActiveTab] = useState('general'); // 'general', 'tasks', 'quiz', 'resources'
   const [resourceSearch, setResourceSearch] = useState('');
   const [isUploadingResource, setIsUploadingResource] = useState(false);
@@ -42,6 +40,8 @@ export function NodeConfigPanel({
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const toast = useToast();
+
+  if (!node) return null;
 
   const data = node.data || {};
 
