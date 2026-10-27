@@ -1,5 +1,8 @@
 # Pathfinder
 
+**video:**
+https://drive.google.com/file/d/1o6bEzHknvmTcia5nPZBCLullwQOFGLD1/view?usp=drive_link
+
 > **Personalized learning pathways, educator-controlled curricula, and server-authoritative mastery progression.**
 
 [![Live Production](https://img.shields.io/badge/Production_Deployment-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://mernfinalproject-snowy.vercel.app)
